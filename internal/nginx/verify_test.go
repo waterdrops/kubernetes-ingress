@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
-type Transport struct {
-}
+type Transport struct{}
 
 func (c Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{
@@ -30,7 +30,7 @@ func getTestHTTPClient() *http.Client {
 func TestVerifyClient(t *testing.T) {
 	c := verifyClient{
 		client:  getTestHTTPClient(),
-		timeout: 25,
+		timeout: 25 * time.Millisecond,
 	}
 
 	configVersion, err := c.GetConfigVersion()

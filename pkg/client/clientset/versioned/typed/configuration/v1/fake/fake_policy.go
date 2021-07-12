@@ -61,7 +61,6 @@ func (c *FakePolicies) List(ctx context.Context, opts v1.ListOptions) (result *c
 func (c *FakePolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(policiesResource, c.ns, opts))
-
 }
 
 // Create takes the representation of a policy and creates it.  Returns the server's representation of the policy, and an error, if there is any.
@@ -79,6 +78,18 @@ func (c *FakePolicies) Create(ctx context.Context, policy *configurationv1.Polic
 func (c *FakePolicies) Update(ctx context.Context, policy *configurationv1.Policy, opts v1.UpdateOptions) (result *configurationv1.Policy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(policiesResource, c.ns, policy), &configurationv1.Policy{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*configurationv1.Policy), err
+}
+
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *FakePolicies) UpdateStatus(ctx context.Context, policy *configurationv1.Policy, opts v1.UpdateOptions) (*configurationv1.Policy, error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewUpdateSubresourceAction(policiesResource, "status", c.ns, policy), &configurationv1.Policy{})
 
 	if obj == nil {
 		return nil, err

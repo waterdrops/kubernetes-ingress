@@ -2,7 +2,7 @@
 
 The VirtualServer and VirtualServerRoute resources are new load balancing configuration, introduced in release 1.5 as an alternative to the Ingress resource. The resources enable use cases not supported with the Ingress resource, such as traffic splitting and advanced content-based routing. The resources are implemented as [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
 
-This document is the reference documentation for the resources. To see additional examples of using the resources for specific use cases, go to the [examples-of-custom-resources](https://github.com/nginxinc/kubernetes-ingress/blob/master/examples-of-custom-resources) folder in our GitHub repo.
+This document is the reference documentation for the resources. To see additional examples of using the resources for specific use cases, go to the [examples-of-custom-resources](https://github.com/nginxinc/kubernetes-ingress/blob/v1.12.0/examples-of-custom-resources) folder in our GitHub repo.
 
 ## Contents
 
@@ -133,7 +133,7 @@ redirect:
      - Type
      - Required
    * - ``secret``
-     - The name of a secret with a TLS certificate and key. The secret must belong to the same namespace as the VirtualServer. The secret must be of the type ``kubernetes.io/tls`` and contain keys named ``tls.crt`` and ``tls.key`` that contain the certificate and private key as described `here <https://kubernetes.io/docs/concepts/services-networking/ingress/#tls>`_. If the secret doesn't exist, NGINX will break any attempt to establish a TLS connection to the host of the VirtualServer.
+     - The name of a secret with a TLS certificate and key. The secret must belong to the same namespace as the VirtualServer. The secret must be of the type ``kubernetes.io/tls`` and contain keys named ``tls.crt`` and ``tls.key`` that contain the certificate and private key as described `here <https://kubernetes.io/docs/concepts/services-networking/ingress/#tls>`_. If the secret doesn't exist or is invalid, NGINX will break any attempt to establish a TLS connection to the host of the VirtualServer.
      - ``string``
      - No
    * - ``redirect``
@@ -189,9 +189,9 @@ name: access-control
    * - ``name``
      - The name of a policy. If the policy doesn't exist or invalid, NGINX will respond with an error response with the `500` status code.
      - ``string``
-     - Yes 
+     - Yes
    * - ``namespace``
-     - The namespace of a policy. If not specified, the namespace of the VirtualServer resource is used. 
+     - The namespace of a policy. If not specified, the namespace of the VirtualServer resource is used.
      - ``string``
      - No
 ```
@@ -218,7 +218,7 @@ The route defines rules for matching client requests to actions like passing a r
      - ``string``
      - Yes
    * - ``policies``
-     - A list of policies. The policies override the policies of the same type defined in the ``spec`` of the VirtualServer. See `Applying Policies </nginx-ingress-controller/configuration/policy-resource/#applying-policies>`_ for more details. 
+     - A list of policies. The policies override the policies of the same type defined in the ``spec`` of the VirtualServer. See `Applying Policies </nginx-ingress-controller/configuration/policy-resource/#applying-policies>`_ for more details.
      - `[]policy <#virtualserver-policy>`_
      - No
    * - ``action``
@@ -351,7 +351,7 @@ action:
      - ``string``
      - Yes
    * - ``policies``
-     - A list of policies. The policies override *all* policies defined in the route of the VirtualServer that references this resource. The policies also override the policies of the same type defined in the ``spec`` of the VirtualServer. See `Applying Policies </nginx-ingress-controller/configuration/policy-resource/#applying-policies>`_ for more details. 
+     - A list of policies. The policies override *all* policies defined in the route of the VirtualServer that references this resource. The policies also override the policies of the same type defined in the ``spec`` of the VirtualServer. See `Applying Policies </nginx-ingress-controller/configuration/policy-resource/#applying-policies>`_ for more details.
      - `[]policy <#virtualserver-policy>`_
      - No
    * - ``action``
@@ -420,12 +420,16 @@ tls:
      - ``string``
      - Yes
    * - ``service``
-     - The name of a `service <https://kubernetes.io/docs/concepts/services-networking/service/>`_. The service must belong to the same namespace as the resource. If the service doesn't exist, NGINX will assume the service has zero endpoints and return a ``502`` response for requests for this upstream. For NGINX Plus only, services of type `ExternalName <https://kubernetes.io/docs/concepts/services-networking/service/#externalname>`_ are also supported (check the `prerequisites <https://github.com/nginxinc/kubernetes-ingress/tree/master/examples/externalname-services#prerequisites>`_\ ).
+     - The name of a `service <https://kubernetes.io/docs/concepts/services-networking/service/>`_. The service must belong to the same namespace as the resource. If the service doesn't exist, NGINX will assume the service has zero endpoints and return a ``502`` response for requests for this upstream. For NGINX Plus only, services of type `ExternalName <https://kubernetes.io/docs/concepts/services-networking/service/#externalname>`_ are also supported (check the `prerequisites <https://github.com/nginxinc/kubernetes-ingress/tree/v1.12.0/examples/externalname-services#prerequisites>`_\ ).
      - ``string``
      - Yes
    * - ``subselector``
      - Selects the pods within the service using label keys and values. By default, all pods of the service are selected. Note: the specified labels are expected to be present in the pods when they are created. If the pod labels are updated, the Ingress Controller will not see that change until the number of the pods is changed.
      - ``map[string]string``
+     - No
+   * - ``use-cluster-ip``
+     - Enables using the Cluster IP and port of the service instead of the default behavior of using the IP and port of the pods. When this field is enabled, the fields that configure NGINX behavior related to multiple upstream servers (like ``lb-method`` and ``next-upstream``) will have no effect, as the Ingress Controller will configure NGINX with only one upstream server that will match the service Cluster IP.
+     - ``boolean``
      - No
    * - ``port``
      - The port of the service. If the service doesn't define that port, NGINX will assume the service has zero endpoints and return a ``502`` response for requests for this upstream. The port must fall into the range ``1..65535``.
@@ -610,6 +614,8 @@ healthCheck:
   statusMatch: "! 500"
 ```
 
+Note: This feature is supported only in NGINX Plus.
+
 ```eval_rst
 .. list-table::
    :header-rows: 1
@@ -692,6 +698,8 @@ sessionCookie:
   secure: true
 ```
 See the [`sticky`](https://nginx.org/en/docs/http/ngx_http_upstream_module.html?#sticky) directive for additional information. The session cookie corresponds to the `sticky cookie` method.
+
+Note: This feature is supported only in NGINX Plus.
 
 ```eval_rst
 .. list-table::
@@ -914,7 +922,7 @@ proxy:
      - `action.Proxy.ResponseHeaders <#action-proxy-responseheaders>`_
      - No
    * - ``rewritePath``
-     - The rewritten URI. If the route path is a regular expression (starts with ~), the rewritePath can include capture groups with ``$1-9``. For example `$1` for the first group, and so on. For more information, check the `rewrite <https://github.com/nginxinc/kubernetes-ingress/tree/master/examples-of-custom-resources/rewrites>`_ example.
+     - The rewritten URI. If the route path is a regular expression (starts with ~), the rewritePath can include capture groups with ``$1-9``. For example `$1` for the first group, and so on. For more information, check the `rewrite <https://github.com/nginxinc/kubernetes-ingress/tree/v1.12.0/examples-of-custom-resources/rewrites>`_ example.
      - ``string``
      - No
 ```
@@ -945,8 +953,14 @@ The RequestHeaders field modifies the headers of the request to the proxied upst
 
 The header defines an HTTP Header:
 ```yaml
-name: My-Header 
+name: My-Header
 value: My-Value
+```
+
+It is possible to override the default value of the `Host` header, which the Ingress Controller sets to [`$host`](https://nginx.org/en/docs/http/ngx_http_core_module.html#var_host):
+```yaml
+name: Host
+value: example.com
 ```
 
 ```eval_rst
@@ -1007,8 +1021,8 @@ The ResponseHeaders field modifies the headers of the response to the client.
 
 The addHeader defines an HTTP Header with an optional `always` field:
 ```yaml
-name: My-Header 
-value: My-Value 
+name: My-Header
+value: My-Value
 always: true
 ```
 
@@ -1458,7 +1472,7 @@ Additionally, this information is also available in the `status` field of the Vi
 
 ```
 $ kubectl describe vs cafe
-. . . 
+. . .
 Status:
   External Endpoints:
     Ip:        12.13.23.123

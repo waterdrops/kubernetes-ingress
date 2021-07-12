@@ -1,5 +1,194 @@
 # Releases
 
+## NGINX Ingress Controller 1.12.0
+
+30 June 2021
+
+OVERVIEW:
+
+Release 1.12.0 includes:
+* The introduction of pre-built containers for advanced capabilities with NGINX Plus through the F5 Container Registry.
+* TransportServer supports TCP/UDP connections through the NGINX streams module adding support for matching specific health check response patterns for granular availability testing of your application, maximum connections to protect your applications from overload, supporting fine tuning of load balancing behavior, and snippets for advanced capability support as soon as you are ready to implement.
+* Availability through the AWS Container marketplace supporting Elastic Kubernetes Service.
+* NGINX App Protect capabilities have been extended to support the latest version and its capabilities.
+
+You will find the complete changelog for release 1.12.0, including bug fixes, improvements, and changes below.
+
+FEATURES:
+* [1633](https://github.com/nginxinc/kubernetes-ingress/pull/1633) Support match in TransportServer health checks.
+* [1619](https://github.com/nginxinc/kubernetes-ingress/pull/1619) Add AWS Marketplace Entitlement verification.
+* [1480](https://github.com/nginxinc/kubernetes-ingress/pull/1480) Add max connections to TransportServer.
+* [1479](https://github.com/nginxinc/kubernetes-ingress/pull/1479) Add load balancing method to TransportServer.
+* [1466](https://github.com/nginxinc/kubernetes-ingress/pull/1466) Support snippets in TransportServer.
+
+FEATURES FOR NGINX APP PROTECT:
+* [1578](https://github.com/nginxinc/kubernetes-ingress/pull/1578) Add support for CSRF protection in APPolicy.
+* [1513](https://github.com/nginxinc/kubernetes-ingress/pull/1513) Support multiple log security configs in Ingresses.
+* [1481](https://github.com/nginxinc/kubernetes-ingress/pull/1481) Add support for user defined browsers in APPolicy.
+* [1411](https://github.com/nginxinc/kubernetes-ingress/pull/1411) Add unary gRPC support in APPolicy.
+
+IMPROVEMENTS:
+* [1671](https://github.com/nginxinc/kubernetes-ingress/pull/1671) Simplify Dockerfile stages for Debian.
+* [1652](https://github.com/nginxinc/kubernetes-ingress/pull/1652) Add HTTPS option to Prometheus endpoint.
+* [1646](https://github.com/nginxinc/kubernetes-ingress/pull/1646) Improve Dockerfile.
+* [1574](https://github.com/nginxinc/kubernetes-ingress/pull/1574) Add Docker image for Alpine with NGINX Plus.
+* [1512](https://github.com/nginxinc/kubernetes-ingress/pull/1512) Don't require default server TLS secret.
+* [1500](https://github.com/nginxinc/kubernetes-ingress/pull/1500) Support ssl_reject_handshake in Ingress and VS.
+* [1494](https://github.com/nginxinc/kubernetes-ingress/pull/1494) Add logs around NGINX Plus binary/flag mismatch.
+* [1492](https://github.com/nginxinc/kubernetes-ingress/pull/1492) Update the IC so that GlobalConfiguration is not mandatory when configured.
+* Documentation improvements: [1649](https://github.com/nginxinc/kubernetes-ingress/pull/1649).
+
+FIXES:
+* [1658](https://github.com/nginxinc/kubernetes-ingress/pull/1658) Add missing njs module to the openshift-image-nap-plus image.
+* [1654](https://github.com/nginxinc/kubernetes-ingress/pull/1654) Fix incorrect configuration and unexpected warnings about Secrets at the IC start.
+* [1501](https://github.com/nginxinc/kubernetes-ingress/pull/1501) Fix ungraceful shutdown of NGINX.
+* Documentation fixes: [1668](https://github.com/nginxinc/kubernetes-ingress/pull/1668), [1594](https://github.com/nginxinc/kubernetes-ingress/pull/1594) thanks to [shaggy245](https://github.com/shaggy245), [1563](https://github.com/nginxinc/kubernetes-ingress/pull/1563), [1551](https://github.com/nginxinc/kubernetes-ingress/pull/1551).
+
+HELM CHART:
+* The version of the helm chart is now 0.10.0.
+* Add new parameters to the Chart: `prometheus.scheme`, `prometheus.secret`. Added in [1652](https://github.com/nginxinc/kubernetes-ingress/pull/1652).
+
+CHANGES:
+* [1604](https://github.com/nginxinc/kubernetes-ingress/pull/1604) Update NGINX Plus to R24. Previously, the Dockerfile had a fixed NGINX Plus version. Now the Dockerfile has a floating version that corresponds to the latest major NGINX Plus version. In the event of a patch version of NGINX Plus being released, make sure to rebuild your image to get the latest version (previously, we released a new Ingress Controller release in that case). Additionally, the AppProtect related packages are no longer fixed -- the Dockerfile will always install the latest version of the packages that work with the latest NGINX Plus version.
+* [1500](https://github.com/nginxinc/kubernetes-ingress/pull/1500) Support ssl_reject_handshake in Ingress and VS. Previously, to handle missing or invalid TLS Secrets in Ingress and VirtualServer resources, the Ingress Controller would configure NGINX to break any attempts for clients to establish TLS connections to the affected hosts using `ssl_ciphers NULL;` in the NGINX configuration. The method didn't work for TLS v1.3. Now the Ingress Controller uses `ssl_reject_handshake on;`, which works for TLS v1.3. 
+* Update NGINX Plus version to R24.
+* Update NGINX version to 1.21.0.
+
+UPGRADE:
+* For NGINX, use the 1.12.0 image from our DockerHub: `nginx/nginx-ingress:1.12.0`, `nginx/nginx-ingress:1.12.0-alpine` or `nginx-ingress:1.12.0-ubi`
+* For NGINX Plus, please build your own image using the 1.12.0 source code.
+* For Helm, use version 0.10.0 of the chart.
+
+SUPPORTED PLATFORMS:
+
+We will provide technical support for the NGINX Ingress Controller on any Kubernetes platform that is currently supported by its provider and which passes the Kubernetes conformance tests.  This release was fully tested on the following Kubernetes versions: 1.16-1.20.
+
+## NGINX Ingress Controller 1.11.3
+
+25 May 2021
+
+CHANGES:
+* Update NGINX version to 1.21.0.
+
+HELM CHART:
+* The version of the Helm chart is now 0.9.3.
+
+UPGRADE:
+* For NGINX, use the 1.11.3 image from our DockerHub: `nginx/nginx-ingress:1.11.3`, `nginx/nginx-ingress:1.11.3-alpine` or `nginx/nginx-ingress:1.11.3-ubi`
+* For NGINX Plus, please build your own image using the 1.11.3 source code.
+* For Helm, use version 0.9.3 of the chart.
+
+## NGINX Ingress Controller 1.11.2
+
+19 May 2021
+
+CHANGES:
+* Update NGINX Plus version to R23 P1.
+
+HELM CHART:
+* The version of the Helm chart is now 0.9.2.
+
+UPGRADE:
+* For NGINX, use the 1.11.2 image from our DockerHub: `nginx/nginx-ingress:1.11.2`, `nginx/nginx-ingress:1.11.2-alpine` or `nginx/nginx-ingress:1.11.2-ubi`
+* For NGINX Plus, please build your own image using the 1.11.2 source code.
+* For Helm, use version 0.9.2 of the chart.
+
+## NGINX Ingress Controller 1.11.1
+
+7 April 2021
+
+CHANGES:
+* Update NGINX version to 1.19.9.
+* Update the OpenSSL libraries used in the UBI images
+* Fixed documentation in the Helm README
+
+HELM CHART:
+* The version of the Helm chart is now 0.9.1.
+
+UPGRADE:
+* For NGINX, use the 1.11.1 image from our DockerHub: `nginx/nginx-ingress:1.11.1`, `nginx/nginx-ingress:1.11.1-alpine` or `nginx/nginx-ingress:1.11.1-ubi`
+* For NGINX Plus, please build your own image using the 1.11.1 source code.
+* For Helm, use version 0.9.1 of the chart.
+
+## NGINX Ingress Controller 1.11.0
+
+31 March 2021
+
+OVERVIEW:
+
+Release 1.11.0 includes:
+* Native NGINX Ingress Controller App Protect (WAF) policy
+* TransportServer improvements in terms of reliability, added features and operational aspects
+* Integration of NGINX Ingress Controller with Istio service mesh
+
+You will find the complete changelog for release 1.11.0, including bug fixes, improvements, and changes below.
+
+FEATURES:
+* [1317](https://github.com/nginxinc/kubernetes-ingress/pull/1317) Add status field to Policy resource.
+* [1449](https://github.com/nginxinc/kubernetes-ingress/pull/1449) Add support for ClusterIP in upstreams in VirtualServers/VirtualServerRoutes.
+* [1413](https://github.com/nginxinc/kubernetes-ingress/pull/1413) Add serverSnippets to TransportServer.
+* [1425](https://github.com/nginxinc/kubernetes-ingress/pull/1425) Add status field to TransportServer resource.
+* [1384](https://github.com/nginxinc/kubernetes-ingress/pull/1384) Add active health checks to TransportServer.
+* [1382](https://github.com/nginxinc/kubernetes-ingress/pull/1382) Add passive health checks to TransportServer.
+* [1346](https://github.com/nginxinc/kubernetes-ingress/pull/1346) Add configurable timeouts to TransportServer.
+* [1297](https://github.com/nginxinc/kubernetes-ingress/pull/1297) Support custom return in the default server. Thanks to [030](https://github.com/030).
+
+FEATURES FOR NGINX APP PROTECT:
+* [1378](https://github.com/nginxinc/kubernetes-ingress/pull/1378) Add WAF Policy.
+
+IMPROVEMENTS:
+* [1420](https://github.com/nginxinc/kubernetes-ingress/pull/1420) Support IngressClassName in TransportServer.
+* [1415](https://github.com/nginxinc/kubernetes-ingress/pull/1415) Handle host and listener collisions for TransportServer resource.
+* [1322](https://github.com/nginxinc/kubernetes-ingress/pull/1322) Improve VirtualServer/VirtualServerRoute warnings for Policies.
+* [1288](https://github.com/nginxinc/kubernetes-ingress/pull/1288) Add stricter validation for some ingress annotations.
+* [1241](https://github.com/nginxinc/kubernetes-ingress/pull/1241) Refactor Dockerfile and Makefile.
+* Documentation improvements: [1320](https://github.com/nginxinc/kubernetes-ingress/pull/1320), [1326](https://github.com/nginxinc/kubernetes-ingress/pull/1326), and [1377](https://github.com/nginxinc/kubernetes-ingress/pull/1377).
+
+FIXES:
+* [1457](https://github.com/nginxinc/kubernetes-ingress/pull/1457) Wait for caches to sync when the Ingress Controller starts.
+* [1444](https://github.com/nginxinc/kubernetes-ingress/pull/1444) Fix setting host header in action proxy in VirtualServer/VirtualServerRoute.
+* [1396](https://github.com/nginxinc/kubernetes-ingress/pull/1396) Fix reload timeout calculation for verifying NGINX reloads.
+
+HELM CHART:
+* The version of the helm chart is now 0.9.0.
+
+CHANGES:
+* [1455](https://github.com/nginxinc/kubernetes-ingress/pull/1455) Update NGINX version to 1.19.8.
+* [1428](https://github.com/nginxinc/kubernetes-ingress/pull/1428) Update Nginx App Protect version to 3.0. **Note**:  [The Advanced gRPC Protection for Unary Traffic](/nginx-app-protect/configuration/#advanced-grpc-protection-for-unary-traffic) is not currently supported.
+
+KNOWN ISSUES:
+* [1448](https://github.com/nginxinc/kubernetes-ingress/issues/1448) When an Ingress Controller pod starts, it can report warnings about missing secrets for Ingress and other resources that reference secrets. Those warnings are intermittent - once the Ingress Controller fully processes the resources of the cluster, it will clear the warnings. Only after that, the Ingress Controller will become ready to accept client traffic - its readiness probe will succeed.
+
+UPGRADE:
+* For NGINX, use the 1.11.0 image from our DockerHub: `nginx/nginx-ingress:1.11.0`, `nginx/nginx-ingress:1.11.0-alpine` or `nginx-ingress:1.11.0-ubi`
+* For NGINX Plus, please build your own image using the 1.11.0 source code.
+* For Helm, use version 0.9.0 of the chart.
+* [1241](https://github.com/nginxinc/kubernetes-ingress/pull/1241) improved the Makefile. As a result, the commands for building the Ingress Controller image were changed. See the updated commands [here](https://docs.nginx.com/nginx-ingress-controller/installation/building-ingress-controller-image/#building-the-image-and-pushing-it-to-the-private-registry).
+* [1241](https://github.com/nginxinc/kubernetes-ingress/pull/1241) also consolidated all Dockerfiles into a singe Dockerfile. If you customized any of the Dockerfiles, make sure to port the changes to the new Dockerfile.
+* [1288](https://github.com/nginxinc/kubernetes-ingress/pull/1288) further improved validation of Ingress annotations. See this [document](https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/#validation) to learn more about which annotations are validated. Note that the Ingress Controller will reject resources with invalid annotations, which means clients will see `404` responses from NGINX.  Before upgrading, ensure the Ingress resources don't have annotations with invalid values. Otherwise, after the upgrade, the Ingress Controller will reject such resources.
+* [1457](https://github.com/nginxinc/kubernetes-ingress/pull/1457) fixed the bug when an Ingress Controller pod could become ready before it generated the configuration for all relevant resources in the cluster. The fix also requires that the Ingress Controller can successfully list the relevant resources from the Kubernetes API. For example, if the `-enable-custom-resources` cli argument is `true` (which is the default), the VirtualServer, VirtualServerRoute, TransportServer, and Policy CRDs must be created in the cluster, so that the Ingress Controller can list them. This is similar to other custom resources -- see the list [here](https://docs.nginx.com/nginx-ingress-controller/installation/installation-with-manifests/#create-custom-resources). Thus, before upgrading, make sure that the CRDs are created in the cluster. Otherwise, the Ingress Controller pods will not become ready.
+
+SUPPORTED PLATFORMS:
+
+We will provide technical support for the NGINX Ingress Controller on any Kubernetes platform that is currently supported by its provider and which passes the Kubernetes conformance tests.  This release was fully tested on the following Kubernetes versions: 1.16-1.20.
+
+## NGINX Ingress Controller 1.10.1
+
+16 March 2021
+
+CHANGES:
+* Update NGINX version to 1.19.8.
+* Add Kubernetes 1.20 support.
+* [1373](https://github.com/nginxinc/kubernetes-ingress/pull/1373), [1439](https://github.com/nginxinc/kubernetes-ingress/pull/1439), [1440](https://github.com/nginxinc/kubernetes-ingress/pull/1440): Fix various issues in the Makefile. In 1.10.0, a bug was introduced that prevented building Ingress Controller images on versions of make < 4.1.
+
+HELM CHART:
+* The version of the Helm chart is now 0.8.1.
+
+UPGRADE:
+* For NGINX, use the 1.10.1 image from our DockerHub: `nginx/nginx-ingress:1.10.1`, `nginx/nginx-ingress:1.10.1-alpine` or `nginx/nginx-ingress:1.10.1-ubi`
+* For NGINX Plus, please build your own image using the 1.10.1 source code.
+* For Helm, use version 0.8.1 of the chart.
+
 ## NGINX Ingress Controller 1.10.0
 
 26 January 2021
@@ -206,16 +395,16 @@ UPGRADE:
 OVERVIEW:
 
 Release 1.8.0 includes:
-* Support for NGINX App Protect Web Application Firewall. 
+* Support for NGINX App Protect Web Application Firewall.
 * Support for configuration snippets and custom template for VirtualServer and VirtualServerRoute resources.
 * Support for request/response header manipulation and request URI rewriting for VirtualServer/VirtualServerRoute.
-* Introducing a new configuration resource - Policy - with the first policy for IP-based access control. 
+* Introducing a new configuration resource - Policy - with the first policy for IP-based access control.
 
 You will find the complete changelog for release 1.8.0, including bug fixes, improvements, and changes below.
 
 FEATURES FOR VIRTUALSERVER AND VIRTUALSERVERROUTE RESOURCES:
 * [1036](https://github.com/nginxinc/kubernetes-ingress/pull/1036): Add VirtualServer custom template support.
-* [1028](https://github.com/nginxinc/kubernetes-ingress/pull/1028): Add access control policy. 
+* [1028](https://github.com/nginxinc/kubernetes-ingress/pull/1028): Add access control policy.
 * [1019](https://github.com/nginxinc/kubernetes-ingress/pull/1019): Add VirtualServer/VirtualServerRoute snippets support.
 * [1006](https://github.com/nginxinc/kubernetes-ingress/pull/1006): Add request/response modifiers to VS and VSR.
 * [994](https://github.com/nginxinc/kubernetes-ingress/pull/994): Support Class Field in VS/VSR.
@@ -235,13 +424,13 @@ BUGFIXES:
 
 HELM CHART:
 * The version of the helm chart is now 0.6.0.
-* Add new parameters to the Chart: `controller.appprotect.enable`, `controller.globalConfiguration.create`, `controller.globalConfiguration.spec`, `controller.readyStatus.enable`, `controller.readyStatus.port`, `controller.config.annotations`, `controller.reportIngressStatus.annotations`. Added in  [1035](https://github.com/nginxinc/kubernetes-ingress/pull/1035), [1034](https://github.com/nginxinc/kubernetes-ingress/pull/1034), [1029](https://github.com/nginxinc/kubernetes-ingress/pull/1029), [1003](https://github.com/nginxinc/kubernetes-ingress/pull/1003) thanks to [RubyLangdon](https://github.com/RubyLangdon). 
+* Add new parameters to the Chart: `controller.appprotect.enable`, `controller.globalConfiguration.create`, `controller.globalConfiguration.spec`, `controller.readyStatus.enable`, `controller.readyStatus.port`, `controller.config.annotations`, `controller.reportIngressStatus.annotations`. Added in  [1035](https://github.com/nginxinc/kubernetes-ingress/pull/1035), [1034](https://github.com/nginxinc/kubernetes-ingress/pull/1034), [1029](https://github.com/nginxinc/kubernetes-ingress/pull/1029), [1003](https://github.com/nginxinc/kubernetes-ingress/pull/1003) thanks to [RubyLangdon](https://github.com/RubyLangdon).
 * [1047](https://github.com/nginxinc/kubernetes-ingress/pull/1047) and [1009](https://github.com/nginxinc/kubernetes-ingress/pull/1009): Change how Helm manages the custom resource defintions (CRDs) to support installing multiple Ingress Controller releases. **Note**: If you're using the custom resources (`controller.enableCustomResources` is set to `true`), this is a breaking change. See the HELM UPGRADE section below for the upgrade instructions.
 
 CHANGES:
 * Update NGINX version to 1.19.1.
 * Update NGINX Plus to R22.
-* [1029](https://github.com/nginxinc/kubernetes-ingress/pull/1029): Add readiness endpoint. The Ingress Controller now exposes a readiness endpoint on port `8081` and the path `/nginx-ready`. The endpoint returns a `200` response after the Ingress Controller finishes the initial configuration of NGINX at the start. The pod template was updated to use that endpoint in a readiness probe. 
+* [1029](https://github.com/nginxinc/kubernetes-ingress/pull/1029): Add readiness endpoint. The Ingress Controller now exposes a readiness endpoint on port `8081` and the path `/nginx-ready`. The endpoint returns a `200` response after the Ingress Controller finishes the initial configuration of NGINX at the start. The pod template was updated to use that endpoint in a readiness probe.
 * [980](https://github.com/nginxinc/kubernetes-ingress/pull/980): Enable leader election by default.
 
 UPGRADE:
@@ -394,7 +583,7 @@ UPGRADE:
 
 OVERVIEW:
 
-Release 1.6.0 includes: 
+Release 1.6.0 includes:
 * Improvements to VirtualServer and VirtualServerRoute resources, adding support for richer load balancing behavior, more sophisticated request routing, redirects, direct responses, and blue-green and circuit breaker patterns. The VirtualServer and VirtualServerRoute resources are enabled by default and are ready for production use.
 * Support for OpenTracing, helping you to monitor and debug complex transactions.
 * An improved security posture, with support to run the Ingress Controller as a non-root user.
@@ -431,7 +620,7 @@ FEATURES FOR VIRTUALSERVER AND VIRTUALSERVERROUTE RESOURCES:
 * [596](https://github.com/nginxinc/kubernetes-ingress/pull/596): Add lb-method support in vs and vsr.
 
 FEATURES:
-* [750](https://github.com/nginxinc/kubernetes-ingress/pull/750): Add support for health status uri customisation. 
+* [750](https://github.com/nginxinc/kubernetes-ingress/pull/750): Add support for health status uri customisation.
 * [691](https://github.com/nginxinc/kubernetes-ingress/pull/691): Helper Functions for custom annotations.
 * [631](https://github.com/nginxinc/kubernetes-ingress/pull/631): Add max_conns support for NGINX plus.
 * [629](https://github.com/nginxinc/kubernetes-ingress/pull/629): Added upstream zone directive annotation. Thanks to [Victor Regalado](https://github.com/vrrs).

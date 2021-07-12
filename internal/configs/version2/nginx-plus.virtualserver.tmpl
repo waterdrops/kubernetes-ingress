@@ -89,11 +89,11 @@ server {
     listen 443 ssl{{ if $ssl.HTTP2 }} http2{{ end }}{{ if $s.ProxyProtocol }} proxy_protocol{{ end }};
         {{ end }}
 
+        {{ if $ssl.RejectHandshake }}
+    ssl_reject_handshake on;
+        {{ else }}
     ssl_certificate {{ $ssl.Certificate }};
     ssl_certificate_key {{ $ssl.CertificateKey }};
-
-        {{ if $ssl.Ciphers }}
-    ssl_ciphers {{ $ssl.Ciphers }};
         {{ end }}
     {{ end }}
 
@@ -177,6 +177,18 @@ server {
     proxy_ssl_session_reuse {{ if .SessionReuse }}on{{else}}off{{end}};
     proxy_ssl_server_name {{ if .ServerName }}on{{else}}off{{end}};
     proxy_ssl_name {{ .SSLName }};
+    {{ end }}
+
+    {{ with $s.WAF }}
+    app_protect_enable {{ .Enable }};
+        {{ if .ApPolicy }}
+    app_protect_policy_file {{ .ApPolicy }};
+        {{ end }}
+
+        {{ if .ApSecurityLogEnable }}
+    app_protect_security_log_enable on;
+    app_protect_security_log {{ .ApLogConf }};
+        {{ end }}
     {{ end }}
 
     {{ range $snippet := $s.Snippets }}
@@ -305,6 +317,18 @@ server {
         proxy_set_header username $jwt_claim_sub;
         {{ end }}
 
+        {{ with $l.WAF }}
+        app_protect_enable {{ .Enable }};
+            {{ if .ApPolicy }}
+        app_protect_policy_file {{ .ApPolicy }};
+            {{ end }}
+
+            {{ if .ApSecurityLogEnable }}
+        app_protect_security_log_enable on;
+        app_protect_security_log {{ .ApLogConf }};
+            {{ end }}
+        {{ end }}
+
         {{ range $e := $l.ErrorPages }}
         error_page {{ $e.Codes }} {{ if ne 0 $e.ResponseCode }}={{ $e.ResponseCode }}{{ end }} "{{ $e.Name }}";
         {{ end }}
@@ -343,7 +367,6 @@ server {
 
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $vs_connection_header;
-        proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Host $host;

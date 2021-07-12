@@ -4,7 +4,7 @@ The Policy resource allows you to configure features like access control and rat
 
 The resource is implemented as a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
 
-This document is the reference documentation for the Policy resource. An example of a Policy for access control is available in our [GitHub repo](https://github.com/nginxinc/kubernetes-ingress/blob/master/examples-of-custom-resources/access-control).
+This document is the reference documentation for the Policy resource. An example of a Policy for access control is available in our [GitHub repo](https://github.com/nginxinc/kubernetes-ingress/blob/v1.12.0/examples-of-custom-resources/access-control).
 
 ## Contents
 
@@ -23,8 +23,12 @@ This document is the reference documentation for the Policy resource. An example
     - [EgressMTLS](#egressmtls)
       - [EgressMTLS Merging Behavior](#egressmtls-merging-behavior)
     - [OIDC](#oidc)
+      - [Prerequisites](#prerequisites-1)
+      - [Limitations](#limitations)
       - [OIDC Merging Behavior](#oidc-merging-behavior)
   - [Using Policy](#using-policy)
+    - [WAF](#waf)
+      - [WAF Merging Behavior](#waf-merging-behavior)
     - [Applying Policies](#applying-policies)
     - [Invalid Policies](#invalid-policies)
     - [Validation](#validation)
@@ -76,6 +80,10 @@ spec:
    * - ``egressMTLS``
      - The EgressMTLS policy configures upstreams authentication and certificate verification.
      - `egressMTLS <#egressmtls>`_
+     - No*
+   * - ``waf``
+     - The WAF policy configures WAF and log configuration policies for `NGINX AppProtect </nginx-ingress-controller/app-protect/installation/>`_
+     - `WAF <#waf>`_
      - No*
 ```
 
@@ -444,7 +452,7 @@ NGINX Plus will pass the ID of an authenticated user to the backend in the HTTP 
 
 #### Prerequisites
 
-For the OIDC feature to work, it is necessary to enable [zone synchronization](https://docs.nginx.com/nginx/admin-guide/high-availability/zone_sync/), otherwise NGINX Plus will fail to reload. Additionally, it is necessary to configure a resolver, so that NGINX Plus can resolve the IDP authorization endpoint. For an example of the necessary configuration see the documentation [here](https://github.com/nginxinc/kubernetes-ingress/blob/master/examples-of-custom-resources/oidc#step-7---configure-nginx-plus-zone-synchronization-and-resolver).
+For the OIDC feature to work, it is necessary to enable [zone synchronization](https://docs.nginx.com/nginx/admin-guide/high-availability/zone_sync/), otherwise NGINX Plus will fail to reload. Additionally, it is necessary to configure a resolver, so that NGINX Plus can resolve the IDP authorization endpoint. For an example of the necessary configuration see the documentation [here](https://github.com/nginxinc/kubernetes-ingress/blob/v1.12.0/examples-of-custom-resources/oidc#step-7---configure-nginx-plus-zone-synchronization-and-resolver).
 
 > **Note**: The configuration in the example doesn't enable TLS and the synchronization between the replica happens in clear text. This could lead to the exposure of tokens.
 
@@ -521,6 +529,67 @@ webapp-policy   27m
 
 For `kubectl get` and similar commands, you can also use the short name `pol` instead of `policy`.
 
+### WAF
+
+> **Feature Status**: WAF is available as a preview feature: it is suitable for experimenting and testing; however, it must be used with caution in production environments. Additionally, while the feature is in preview status, we might introduce some backward-incompatible changes to the resource specification in the next releases. The feature is disabled by default. To enable it, set the [enable-preview-policies](/nginx-ingress-controller/configuration/global-configuration/command-line-arguments/#cmdoption-enable-preview-policies) command-line argument of the Ingress Controller.
+
+> Note: This feature is only available in NGINX Plus with AppProtect.
+
+The WAF policy configures NGINX Plus to secure client requests using App Protect policies.
+
+For example, the following policy will enable the referenced APPolicy and APLogConf with the configured log destination:
+```yaml
+waf:
+  enable: true
+  apPolicy: "default/dataguard-alarm"
+  securityLog:
+    enable: true
+    apLogConf: "default/logconf"
+    logDest: "syslog:server=127.0.0.1:514"
+```
+
+> Note: The feature is implemented using the NGINX Plus [NGINX App Protect Module](https://docs.nginx.com/nginx-app-protect/configuration/).
+
+```eval_rst
+.. list-table::
+   :header-rows: 1
+
+   * - Field
+     - Description
+     - Type
+     - Required
+   * - ``enable``
+     - Enables NGINX App Protect.
+     - ``bool``
+     - Yes
+   * - ``apPolicy``
+     - The `App Protect policy </nginx-ingress-controller/app-protect/configuration/#app-protect-policies/>`_ of the WAF. Accepts an optional namespace.
+     - ``string``
+     - No
+   * - ``securityLog.enable``
+     -  Enables security log.
+     - ``bool``
+     - No
+   * - ``securityLog.apLogConf``
+     -  The `App Protect log conf </nginx-ingress-controller/app-protect/configuration/#app-protect-logs>`_ resource. Accepts an optional namespace.
+     - ``string``
+     - No
+   * - ``securityLog.logDest``
+     -  The log destination for the security log. Accepted variables are ``syslog:server=<ip-address | localhost>:<port>``, ``stderr``, ``<absolute path to file>``. Default is ``"syslog:server=127.0.0.1:514"``.
+     - ``string``
+     - No
+```
+
+#### WAF Merging Behavior
+
+A VirtualServer/VirtualServerRoute can reference multiple WAF policies. However, only one can be applied. Every subsequent reference will be ignored. For example, here we reference two policies:
+```yaml
+policies:
+- name: waf-policy-one
+- name: waf-policy-two
+```
+In this example the Ingress Controller will use the configuration from the first policy reference `waf-policy-one`, and ignores `waf-policy-two`.
+
 ### Applying Policies
 
 You can apply policies to both VirtualServer and VirtualServerRoute resources. For example:
@@ -544,11 +613,13 @@ You can apply policies to both VirtualServer and VirtualServerRoute resources. F
       routes:
       - path: /tea
         policies: # route policies
-        - policy2
+        - name: policy2
+          namespace: cafe
         route: tea/tea
       - path: /coffee
         policies: # route policies
-        - policy3
+        - name: policy3
+          namespace: cafe
         action:
           pass: coffee
       ```
@@ -576,7 +647,8 @@ You can apply policies to both VirtualServer and VirtualServerRoute resources. F
       subroutes: # subroute policies
       - path: /tea
         policies:
-        - policy4
+        - name: policy4
+          namespace: tea
         action:
           pass: tea
     ```
@@ -650,5 +722,16 @@ Events:
   Warning  Rejected  7s    nginx-ingress-controller  Policy default/webapp-policy is invalid and was rejected: spec.accessControl.allow[0]: Invalid value: "10.0.0.": must be a CIDR or IP
 ```
 Note how the events section includes a Warning event with the Rejected reason.
+
+Additionally, this information is also available in the `status` field of the Policy resource. Note the Status section of the Policy:
+
+```
+$ kubectl describe pol webapp-policy
+. . .
+Status:
+  Message:  Policy default/webapp-policy is invalid and was rejected: spec.accessControl.allow[0]: Invalid value: "10.0.0.": must be a CIDR or IP
+  Reason:   Rejected
+  State:    Invalid
+```
 
 **Note**: If you make an existing resource invalid, the Ingress Controller will reject it.

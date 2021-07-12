@@ -12,6 +12,7 @@ import (
 	"github.com/nginxinc/kubernetes-ingress/internal/configs"
 	"github.com/nginxinc/kubernetes-ingress/internal/configs/version1"
 	"github.com/nginxinc/kubernetes-ingress/internal/configs/version2"
+	"github.com/nginxinc/kubernetes-ingress/internal/k8s/appprotect"
 	"github.com/nginxinc/kubernetes-ingress/internal/k8s/secrets"
 	"github.com/nginxinc/kubernetes-ingress/internal/metrics/collectors"
 	"github.com/nginxinc/kubernetes-ingress/internal/nginx"
@@ -21,8 +22,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1beta1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -227,108 +230,94 @@ func TestHasCorrectIngressClass(t *testing.T) {
 	}
 }
 
-func TestHasCorrectIngressClassVS(t *testing.T) {
-	ingressClass := "ing-ctrl"
-	lbcIngOnlyTrue := &LoadBalancerController{
-		ingressClass:        ingressClass,
-		useIngressClassOnly: true,
-		metricsCollector:    collectors.NewControllerFakeCollector(),
+func deepCopyWithIngressClass(obj interface{}, class string) interface{} {
+	switch obj := obj.(type) {
+	case *conf_v1.VirtualServer:
+		objCopy := obj.DeepCopy()
+		objCopy.Spec.IngressClass = class
+		return objCopy
+	case *conf_v1.VirtualServerRoute:
+		objCopy := obj.DeepCopy()
+		objCopy.Spec.IngressClass = class
+		return objCopy
+	case *conf_v1alpha1.TransportServer:
+		objCopy := obj.DeepCopy()
+		objCopy.Spec.IngressClass = class
+		return objCopy
+	default:
+		panic(fmt.Sprintf("unknown type %T", obj))
 	}
+}
 
-	testsWithIngressClassOnlyVS := []struct {
-		lbc      *LoadBalancerController
-		ing      *conf_v1.VirtualServer
-		expected bool
-	}{
-		{
-			lbcIngOnlyTrue,
-			&conf_v1.VirtualServer{
-				Spec: conf_v1.VirtualServerSpec{
-					IngressClass: "",
-				},
-			},
-			true,
-		},
-		{
-			lbcIngOnlyTrue,
-			&conf_v1.VirtualServer{
-				Spec: conf_v1.VirtualServerSpec{
-					IngressClass: "gce",
-				},
-			},
-			false,
-		},
-		{
-			lbcIngOnlyTrue,
-			&conf_v1.VirtualServer{
-				Spec: conf_v1.VirtualServerSpec{
-					IngressClass: ingressClass,
-				},
-			},
-			true,
-		},
-		{
-			lbcIngOnlyTrue,
-			&conf_v1.VirtualServer{},
-			true,
-		},
-	}
-
-	lbcIngOnlyFalse := &LoadBalancerController{
-		ingressClass:        ingressClass,
+func TestIngressClassForCustomResources(t *testing.T) {
+	ctrl := &LoadBalancerController{
+		ingressClass:        "nginx",
 		useIngressClassOnly: false,
-		metricsCollector:    collectors.NewControllerFakeCollector(),
 	}
-	testsWithoutIngressClassOnlyVS := []struct {
-		lbc      *LoadBalancerController
-		ing      *conf_v1.VirtualServer
-		expected bool
+
+	ctrlWithUseICOnly := &LoadBalancerController{
+		ingressClass:        "nginx",
+		useIngressClassOnly: true,
+	}
+
+	tests := []struct {
+		lbc             *LoadBalancerController
+		objIngressClass string
+		expected        bool
+		msg             string
 	}{
 		{
-			lbcIngOnlyFalse,
-			&conf_v1.VirtualServer{
-				Spec: conf_v1.VirtualServerSpec{
-					IngressClass: "",
-				},
-			},
-			true,
+			lbc:             ctrl,
+			objIngressClass: "nginx",
+			expected:        true,
+			msg:             "Ingress Controller handles a resource that matches its IngressClass",
 		},
 		{
-			lbcIngOnlyFalse,
-			&conf_v1.VirtualServer{
-				Spec: conf_v1.VirtualServerSpec{
-					IngressClass: "gce",
-				},
-			},
-			false,
+			lbc:             ctrlWithUseICOnly,
+			objIngressClass: "nginx",
+			expected:        true,
+			msg:             "Ingress Controller with useIngressClassOnly handles a resource that matches its IngressClass",
 		},
 		{
-			lbcIngOnlyFalse,
-			&conf_v1.VirtualServer{
-				Spec: conf_v1.VirtualServerSpec{
-					IngressClass: ingressClass,
-				},
-			},
-			true,
+			lbc:             ctrl,
+			objIngressClass: "",
+			expected:        true,
+			msg:             "Ingress Controller handles a resource with an empty IngressClass",
 		},
 		{
-			lbcIngOnlyFalse,
-			&conf_v1.VirtualServer{},
-			true,
+			lbc:             ctrlWithUseICOnly,
+			objIngressClass: "",
+			expected:        true,
+			msg:             "Ingress Controller with useIngressClassOnly handles a resource with an empty IngressClass",
+		},
+		{
+			lbc:             ctrl,
+			objIngressClass: "gce",
+			expected:        false,
+			msg:             "Ingress Controller doesn't handle a resource that doesn't match its IngressClass",
+		},
+		{
+			lbc:             ctrlWithUseICOnly,
+			objIngressClass: "gce",
+			expected:        false,
+			msg:             "Ingress Controller with useIngressClassOnly doesn't handle a resource that doesn't match its IngressClass",
 		},
 	}
 
-	for _, test := range testsWithIngressClassOnlyVS {
-		if result := test.lbc.HasCorrectIngressClass(test.ing); result != test.expected {
-			t.Errorf("lbc.HasCorrectIngressClass(ing), lbc.ingressClass=%v, lbc.useIngressClassOnly=%v, ingressClassKey=%v, ing.IngressClass=%v; got %v, expected %v",
-				test.lbc.ingressClass, test.lbc.useIngressClassOnly, ingressClassKey, test.ing.Spec.IngressClass, result, test.expected)
-		}
+	resources := []interface{}{
+		&conf_v1.VirtualServer{},
+		&conf_v1.VirtualServerRoute{},
+		&conf_v1alpha1.TransportServer{},
 	}
 
-	for _, test := range testsWithoutIngressClassOnlyVS {
-		if result := test.lbc.HasCorrectIngressClass(test.ing); result != test.expected {
-			t.Errorf("lbc.HasCorrectIngressClass(ing), lbc.ingressClass=%v, lbc.useIngressClassOnly=%v, ingressClassKey=%v, ing.IngressClass=%v; got %v, expected %v",
-				test.lbc.ingressClass, test.lbc.useIngressClassOnly, ingressClassKey, test.ing.Spec.IngressClass, result, test.expected)
+	for _, r := range resources {
+		for _, test := range tests {
+			obj := deepCopyWithIngressClass(r, test.objIngressClass)
+
+			result := test.lbc.HasCorrectIngressClass(obj)
+			if result != test.expected {
+				t.Errorf("HasCorrectIngressClass() returned %v but expected %v for the case of %q for %T", result, test.expected, test.msg, obj)
+			}
 		}
 	}
 }
@@ -518,7 +507,7 @@ func TestFindProbeForPods(t *testing.T) {
 
 func TestGetServicePortForIngressPort(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset()
-	cnf := configs.NewConfigurator(&nginx.LocalManager{}, &configs.StaticConfigParams{}, &configs.ConfigParams{}, &configs.GlobalConfigParams{}, &version1.TemplateExecutor{}, &version2.TemplateExecutor{}, false, false, nil, false, nil, false)
+	cnf := configs.NewConfigurator(&nginx.LocalManager{}, &configs.StaticConfigParams{}, &configs.ConfigParams{}, &version1.TemplateExecutor{}, &version2.TemplateExecutor{}, false, false, nil, false, nil, false)
 	lbc := LoadBalancerController{
 		client:           fakeClient,
 		ingressClass:     "nginx",
@@ -563,63 +552,6 @@ func TestGetServicePortForIngressPort(t *testing.T) {
 	svcPort = lbc.getServicePortForIngressPort(ingSvcPort, &svc)
 	if svcPort != nil {
 		t.Errorf("Mismatched strings should not return port: %+v", svcPort)
-	}
-}
-
-func TestFindTransportServersForService(t *testing.T) {
-	ts1 := conf_v1alpha1.TransportServer{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      "ts-1",
-			Namespace: "ns-1",
-		},
-		Spec: conf_v1alpha1.TransportServerSpec{
-			Upstreams: []conf_v1alpha1.Upstream{
-				{
-					Service: "test-service",
-				},
-			},
-		},
-	}
-	ts2 := conf_v1alpha1.TransportServer{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      "ts-2",
-			Namespace: "ns-1",
-		},
-		Spec: conf_v1alpha1.TransportServerSpec{
-			Upstreams: []conf_v1alpha1.Upstream{
-				{
-					Service: "some-service",
-				},
-			},
-		},
-	}
-	ts3 := conf_v1alpha1.TransportServer{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      "ts-3",
-			Namespace: "ns-2",
-		},
-		Spec: conf_v1alpha1.TransportServerSpec{
-			Upstreams: []conf_v1alpha1.Upstream{
-				{
-					Service: "test-service",
-				},
-			},
-		},
-	}
-	transportServers := []*conf_v1alpha1.TransportServer{&ts1, &ts2, &ts3}
-
-	service := v1.Service{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      "test-service",
-			Namespace: "ns-1",
-		},
-	}
-
-	expected := []*conf_v1alpha1.TransportServer{&ts1}
-
-	result := findTransportServersForService(transportServers, &service)
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("findTransportServersForService returned %v but expected %v", result, expected)
 	}
 }
 
@@ -826,7 +758,7 @@ func TestGetPolicies(t *testing.T) {
 
 	expectedPolicies := []*conf_v1.Policy{validPolicy}
 	expectedErrors := []error{
-		errors.New("Policy default/invalid-policy is invalid: spec: Invalid value: \"\": must specify exactly one of: `accessControl`, `rateLimit`, `ingressMTLS`, `egressMTLS`, `jwt`, `oidc`"),
+		errors.New("Policy default/invalid-policy is invalid: spec: Invalid value: \"\": must specify exactly one of: `accessControl`, `rateLimit`, `ingressMTLS`, `egressMTLS`, `jwt`, `oidc`, `waf`"),
 		errors.New("Policy nginx-ingress/valid-policy doesn't exist"),
 		errors.New("Failed to get policy nginx-ingress/some-policy: GetByKey error"),
 	}
@@ -835,8 +767,8 @@ func TestGetPolicies(t *testing.T) {
 	if !reflect.DeepEqual(result, expectedPolicies) {
 		t.Errorf("lbc.getPolicies() returned \n%v but \nexpected %v", result, expectedPolicies)
 	}
-	if !reflect.DeepEqual(errors, expectedErrors) {
-		t.Errorf("lbc.getPolicies() returned \n%v but expected \n%v", errors, expectedErrors)
+	if diff := cmp.Diff(expectedErrors, errors, cmp.Comparer(errorComparer)); diff != "" {
+		t.Errorf("lbc.getPolicies() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -1241,7 +1173,7 @@ func TestFindPoliciesForSecret(t *testing.T) {
 
 func errorComparer(e1, e2 error) bool {
 	if e1 == nil || e2 == nil {
-		return e1 == e2
+		return errors.Is(e1, e2)
 	}
 
 	return e1.Error() == e2.Error()
@@ -1830,5 +1762,333 @@ func TestAddOidcSecret(t *testing.T) {
 		if diff := cmp.Diff(test.expectedSecretRefs, result, cmp.Comparer(errorComparer)); diff != "" {
 			t.Errorf("addOIDCSecretRefs() '%v' mismatch (-want +got):\n%s", test.msg, diff)
 		}
+	}
+}
+
+func TestAddWAFPolicyRefs(t *testing.T) {
+	apPol := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"namespace": "default",
+				"name":      "ap-pol",
+			},
+		},
+	}
+
+	logConf := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"namespace": "default",
+				"name":      "log-conf",
+			},
+		},
+	}
+
+	tests := []struct {
+		policies            []*conf_v1.Policy
+		expectedApPolRefs   map[string]*unstructured.Unstructured
+		expectedLogConfRefs map[string]*unstructured.Unstructured
+		wantErr             bool
+		msg                 string
+	}{
+		{
+			policies: []*conf_v1.Policy{
+				{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name:      "waf-pol",
+						Namespace: "default",
+					},
+					Spec: conf_v1.PolicySpec{
+						WAF: &conf_v1.WAF{
+							Enable:   true,
+							ApPolicy: "default/ap-pol",
+							SecurityLog: &conf_v1.SecurityLog{
+								Enable:    true,
+								ApLogConf: "log-conf",
+							},
+						},
+					},
+				},
+			},
+			expectedApPolRefs: map[string]*unstructured.Unstructured{
+				"default/ap-pol": apPol,
+			},
+			expectedLogConfRefs: map[string]*unstructured.Unstructured{
+				"default/log-conf": logConf,
+			},
+			wantErr: false,
+			msg:     "base test",
+		},
+		{
+			policies: []*conf_v1.Policy{
+				{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name:      "waf-pol",
+						Namespace: "default",
+					},
+					Spec: conf_v1.PolicySpec{
+						WAF: &conf_v1.WAF{
+							Enable:   true,
+							ApPolicy: "non-existing-ap-pol",
+						},
+					},
+				},
+			},
+			wantErr:             true,
+			expectedApPolRefs:   make(map[string]*unstructured.Unstructured),
+			expectedLogConfRefs: make(map[string]*unstructured.Unstructured),
+			msg:                 "apPol doesn't exist",
+		},
+		{
+			policies: []*conf_v1.Policy{
+				{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name:      "waf-pol",
+						Namespace: "default",
+					},
+					Spec: conf_v1.PolicySpec{
+						WAF: &conf_v1.WAF{
+							Enable:   true,
+							ApPolicy: "ap-pol",
+							SecurityLog: &conf_v1.SecurityLog{
+								Enable:    true,
+								ApLogConf: "non-existing-log-conf",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			expectedApPolRefs: map[string]*unstructured.Unstructured{
+				"default/ap-pol": apPol,
+			},
+			expectedLogConfRefs: make(map[string]*unstructured.Unstructured),
+			msg:                 "logConf doesn't exist",
+		},
+	}
+
+	lbc := LoadBalancerController{
+		appProtectConfiguration: appprotect.NewFakeConfiguration(),
+	}
+	lbc.appProtectConfiguration.AddOrUpdatePolicy(apPol)
+	lbc.appProtectConfiguration.AddOrUpdateLogConf(logConf)
+
+	for _, test := range tests {
+		resApPolicy := make(map[string]*unstructured.Unstructured)
+		resLogConf := make(map[string]*unstructured.Unstructured)
+
+		if err := lbc.addWAFPolicyRefs(resApPolicy, resLogConf, test.policies); (err != nil) != test.wantErr {
+			t.Errorf("LoadBalancerController.addWAFPolicyRefs() error = %v, wantErr %v", err, test.wantErr)
+		}
+		if diff := cmp.Diff(test.expectedApPolRefs, resApPolicy); diff != "" {
+			t.Errorf("LoadBalancerController.addWAFPolicyRefs() '%v' mismatch (-want +got):\n%s", test.msg, diff)
+		}
+		if diff := cmp.Diff(test.expectedLogConfRefs, resLogConf); diff != "" {
+			t.Errorf("LoadBalancerController.addWAFPolicyRefs() '%v' mismatch (-want +got):\n%s", test.msg, diff)
+		}
+	}
+}
+
+func TestGetWAFPoliciesForAppProtectPolicy(t *testing.T) {
+	apPol := &conf_v1.Policy{
+		Spec: conf_v1.PolicySpec{
+			WAF: &conf_v1.WAF{
+				Enable:   true,
+				ApPolicy: "ns1/apPol",
+			},
+		},
+	}
+
+	apPolNs2 := &conf_v1.Policy{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Namespace: "ns1",
+		},
+		Spec: conf_v1.PolicySpec{
+			WAF: &conf_v1.WAF{
+				Enable:   true,
+				ApPolicy: "ns2/apPol",
+			},
+		},
+	}
+
+	apPolNoNs := &conf_v1.Policy{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Namespace: "default",
+		},
+		Spec: conf_v1.PolicySpec{
+			WAF: &conf_v1.WAF{
+				Enable:   true,
+				ApPolicy: "apPol",
+			},
+		},
+	}
+
+	policies := []*conf_v1.Policy{
+		apPol, apPolNs2, apPolNoNs,
+	}
+
+	tests := []struct {
+		pols []*conf_v1.Policy
+		key  string
+		want []*conf_v1.Policy
+		msg  string
+	}{
+		{
+			pols: policies,
+			key:  "ns1/apPol",
+			want: []*conf_v1.Policy{apPol},
+			msg:  "WAF pols that ref apPol which has a namepace",
+		},
+		{
+			pols: policies,
+			key:  "default/apPol",
+			want: []*conf_v1.Policy{apPolNoNs},
+			msg:  "WAF pols that ref apPol which has no namepace",
+		},
+		{
+			pols: policies,
+			key:  "ns2/apPol",
+			want: []*conf_v1.Policy{apPolNs2},
+			msg:  "WAF pols that ref apPol which is in another ns",
+		},
+		{
+			pols: policies,
+			key:  "ns1/apPol-with-no-valid-refs",
+			want: nil,
+			msg:  "WAF pols where there is no valid ref",
+		},
+	}
+	for _, test := range tests {
+		got := getWAFPoliciesForAppProtectPolicy(test.pols, test.key)
+		if diff := cmp.Diff(test.want, got); diff != "" {
+			t.Errorf("getWAFPoliciesForAppProtectPolicy() returned unexpected result for the case of: %v (-want +got):\n%s", test.msg, diff)
+		}
+	}
+}
+
+func TestGetWAFPoliciesForAppProtectLogConf(t *testing.T) {
+	logConf := &conf_v1.Policy{
+		Spec: conf_v1.PolicySpec{
+			WAF: &conf_v1.WAF{
+				Enable: true,
+				SecurityLog: &conf_v1.SecurityLog{
+					Enable:    true,
+					ApLogConf: "ns1/logConf",
+				},
+			},
+		},
+	}
+
+	logConfNs2 := &conf_v1.Policy{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Namespace: "ns1",
+		},
+		Spec: conf_v1.PolicySpec{
+			WAF: &conf_v1.WAF{
+				Enable: true,
+				SecurityLog: &conf_v1.SecurityLog{
+					Enable:    true,
+					ApLogConf: "ns2/logConf",
+				},
+			},
+		},
+	}
+
+	logConfNoNs := &conf_v1.Policy{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Namespace: "default",
+		},
+		Spec: conf_v1.PolicySpec{
+			WAF: &conf_v1.WAF{
+				Enable: true,
+				SecurityLog: &conf_v1.SecurityLog{
+					Enable:    true,
+					ApLogConf: "logConf",
+				},
+			},
+		},
+	}
+
+	policies := []*conf_v1.Policy{
+		logConf, logConfNs2, logConfNoNs,
+	}
+
+	tests := []struct {
+		pols []*conf_v1.Policy
+		key  string
+		want []*conf_v1.Policy
+		msg  string
+	}{
+		{
+			pols: policies,
+			key:  "ns1/logConf",
+			want: []*conf_v1.Policy{logConf},
+			msg:  "WAF pols that ref logConf which has a namepace",
+		},
+		{
+			pols: policies,
+			key:  "default/logConf",
+			want: []*conf_v1.Policy{logConfNoNs},
+			msg:  "WAF pols that ref logConf which has no namepace",
+		},
+		{
+			pols: policies,
+			key:  "ns2/logConf",
+			want: []*conf_v1.Policy{logConfNs2},
+			msg:  "WAF pols that ref logConf which is in another ns",
+		},
+		{
+			pols: policies,
+			key:  "ns1/logConf-with-no-valid-refs",
+			want: nil,
+			msg:  "WAF pols where there is no valid logConf ref",
+		},
+	}
+	for _, test := range tests {
+		got := getWAFPoliciesForAppProtectLogConf(test.pols, test.key)
+		if diff := cmp.Diff(test.want, got); diff != "" {
+			t.Errorf("getWAFPoliciesForAppProtectLogConf() returned unexpected result for the case of: %v (-want +got):\n%s", test.msg, diff)
+		}
+	}
+}
+
+func TestPreSyncSecrets(t *testing.T) {
+	lbc := LoadBalancerController{
+		isNginxPlus: true,
+		secretStore: secrets.NewEmptyFakeSecretsStore(),
+		secretLister: &cache.FakeCustomStore{
+			ListFunc: func() []interface{} {
+				return []interface{}{
+					&api_v1.Secret{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name:      "supported-secret",
+							Namespace: "default",
+						},
+						Type: api_v1.SecretTypeTLS,
+					},
+					&api_v1.Secret{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name:      "unsupported-secret",
+							Namespace: "default",
+						},
+						Type: api_v1.SecretTypeOpaque,
+					},
+				}
+			},
+		},
+	}
+
+	lbc.preSyncSecrets()
+
+	supportedKey := "default/supported-secret"
+	ref := lbc.secretStore.GetSecret(supportedKey)
+	if ref.Error != nil {
+		t.Errorf("GetSecret(%q) returned a reference with an unexpected error %v", supportedKey, ref.Error)
+	}
+
+	unsupportedKey := "default/unsupported-secret"
+	ref = lbc.secretStore.GetSecret(unsupportedKey)
+	if ref.Error == nil {
+		t.Errorf("GetSecret(%q) returned a reference without an expected error", unsupportedKey)
 	}
 }

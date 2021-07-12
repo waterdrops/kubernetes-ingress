@@ -22,11 +22,10 @@ func TestValidatePort(t *testing.T) {
 			t.Errorf("Error for valid port:  %v err: %v\n", goodPort, err)
 		}
 	}
-
 }
 
 func TestParseNginxStatusAllowCIDRs(t *testing.T) {
-	var badCIDRs = []struct {
+	badCIDRs := []struct {
 		input         string
 		expectedError error
 	}{
@@ -52,7 +51,7 @@ func TestParseNginxStatusAllowCIDRs(t *testing.T) {
 		}
 	}
 
-	var goodCIDRs = []struct {
+	goodCIDRs := []struct {
 		input    string
 		expected []string
 	}{
@@ -121,42 +120,6 @@ func TestValidateLocation(t *testing.T) {
 		err := validateLocation(goodLocation)
 		if err != nil {
 			t.Errorf("validateLocation(%v) returned an error when it should have returned no error: %v", goodLocation, err)
-		}
-	}
-}
-
-func TestParseReloadTimeout(t *testing.T) {
-	tests := []struct {
-		timeout           int
-		appProtectEnabled bool
-		expected          int
-	}{
-		{
-			timeout:           0,
-			appProtectEnabled: true,
-			expected:          20000,
-		},
-		{
-			timeout:           0,
-			appProtectEnabled: false,
-			expected:          4000,
-		},
-		{
-			timeout:           1000,
-			appProtectEnabled: true,
-			expected:          1000,
-		},
-		{
-			timeout:           1000,
-			appProtectEnabled: false,
-			expected:          1000,
-		},
-	}
-
-	for _, test := range tests {
-		result := parseReloadTimeout(test.appProtectEnabled, test.timeout)
-		if result != test.expected {
-			t.Errorf("parseReloadTimeout(%v, %v) returned %v but expected %v", test.appProtectEnabled, test.timeout, result, test.expected)
 		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/golang/glog"
 	conf_v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
 	v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
+	conf_v1alpha1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1alpha1"
 	k8s_nginx "github.com/nginxinc/kubernetes-ingress/pkg/client/clientset/versioned"
 	api_v1 "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1beta1"
@@ -40,6 +41,8 @@ type statusUpdater struct {
 	ingressLister            *storeToIngressLister
 	virtualServerLister      cache.Store
 	virtualServerRouteLister cache.Store
+	transportServerLister    cache.Store
+	policyLister             cache.Store
 	confClient               k8s_nginx.Interface
 }
 
@@ -197,8 +200,10 @@ func (su *statusUpdater) saveStatus(ips []string) {
 	su.status = statusIngs
 }
 
-var intPorts = [2]int32{80, 443}
-var stringPorts = [2]string{"http", "https"}
+var (
+	intPorts    = [2]int32{80, 443}
+	stringPorts = [2]string{"http", "https"}
+)
 
 func isRequiredPort(port intstr.IntOrString) bool {
 	if port.Type == intstr.Int {
@@ -331,6 +336,21 @@ func (su *statusUpdater) ClearStatusFromIngressLink() {
 	su.externalEndpoints = su.generateExternalEndpointsFromStatus(su.status)
 }
 
+func (su *statusUpdater) retryUpdateTransportServerStatus(tsCopy *conf_v1alpha1.TransportServer) error {
+	ts, err := su.confClient.K8sV1alpha1().TransportServers(tsCopy.Namespace).Get(context.TODO(), tsCopy.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	ts.Status = tsCopy.Status
+	_, err = su.confClient.K8sV1alpha1().TransportServers(ts.Namespace).UpdateStatus(context.TODO(), ts, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (su *statusUpdater) retryUpdateVirtualServerStatus(vsCopy *conf_v1.VirtualServer) error {
 	vs, err := su.confClient.K8sV1().VirtualServers(vsCopy.Namespace).Get(context.TODO(), vsCopy.Name, metav1.GetOptions{})
 	if err != nil {
@@ -374,6 +394,48 @@ func hasVsStatusChanged(vs *conf_v1.VirtualServer, state string, reason string, 
 		return true
 	}
 
+	return false
+}
+
+// UpdateTransportServerStatus updates the status of a TransportServer.
+func (su *statusUpdater) UpdateTransportServerStatus(ts *conf_v1alpha1.TransportServer, state string, reason string, message string) error {
+	tsLatest, exists, err := su.transportServerLister.Get(ts)
+	if err != nil {
+		glog.V(3).Infof("error getting TransportServer from Store: %v", err)
+		return err
+	}
+	if !exists {
+		glog.V(3).Infof("TransportServer doesn't exist in Store")
+		return nil
+	}
+
+	if !hasTsStatusChanged(tsLatest.(*conf_v1alpha1.TransportServer), state, reason, message) {
+		return nil
+	}
+
+	tsCopy := tsLatest.(*conf_v1alpha1.TransportServer).DeepCopy()
+	tsCopy.Status.State = state
+	tsCopy.Status.Reason = reason
+	tsCopy.Status.Message = message
+
+	_, err = su.confClient.K8sV1alpha1().TransportServers(tsCopy.Namespace).UpdateStatus(context.TODO(), tsCopy, metav1.UpdateOptions{})
+	if err != nil {
+		glog.V(3).Infof("error setting TransportServer %v/%v status, retrying: %v", tsCopy.Namespace, tsCopy.Name, err)
+		return su.retryUpdateTransportServerStatus(tsCopy)
+	}
+	return err
+}
+
+func hasTsStatusChanged(ts *conf_v1alpha1.TransportServer, state string, reason string, message string) bool {
+	if ts.Status.State != state {
+		return true
+	}
+	if ts.Status.Reason != reason {
+		return true
+	}
+	if ts.Status.Message != message {
+		return true
+	}
 	return false
 }
 
@@ -557,4 +619,55 @@ func (su *statusUpdater) generateExternalEndpointsFromStatus(status []api_v1.Loa
 	}
 
 	return externalEndpoints
+}
+
+func hasPolicyStatusChanged(pol *v1.Policy, state string, reason string, message string) bool {
+	return pol.Status.State != state || pol.Status.Reason != reason || pol.Status.Message != message
+}
+
+// UpdatePolicyStatus updates the status of a Policy.
+func (su *statusUpdater) UpdatePolicyStatus(pol *v1.Policy, state string, reason string, message string) error {
+	// Get an up-to-date Policy from the Store
+	polLatest, exists, err := su.policyLister.Get(pol)
+	if err != nil {
+		glog.V(3).Infof("error getting policy from Store: %v", err)
+		return err
+	}
+	if !exists {
+		glog.V(3).Infof("Policy doesn't exist in Store")
+		return nil
+	}
+
+	polCopy := polLatest.(*v1.Policy)
+
+	if !hasPolicyStatusChanged(polCopy, state, reason, message) {
+		return nil
+	}
+
+	polCopy.Status.State = state
+	polCopy.Status.Reason = reason
+	polCopy.Status.Message = message
+
+	_, err = su.confClient.K8sV1().Policies(polCopy.Namespace).UpdateStatus(context.TODO(), polCopy, metav1.UpdateOptions{})
+	if err != nil {
+		glog.V(3).Infof("error setting Policy %v/%v status, retrying: %v", polCopy.Namespace, polCopy.Name, err)
+		return su.retryUpdatePolicyStatus(polCopy)
+	}
+
+	return nil
+}
+
+func (su *statusUpdater) retryUpdatePolicyStatus(polCopy *v1.Policy) error {
+	pol, err := su.confClient.K8sV1().Policies(polCopy.Namespace).Get(context.TODO(), polCopy.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	pol.Status = polCopy.Status
+	_, err = su.confClient.K8sV1().Policies(pol.Namespace).UpdateStatus(context.TODO(), pol, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

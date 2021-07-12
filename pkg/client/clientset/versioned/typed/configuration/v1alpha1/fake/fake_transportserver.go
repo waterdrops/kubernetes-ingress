@@ -61,7 +61,6 @@ func (c *FakeTransportServers) List(ctx context.Context, opts v1.ListOptions) (r
 func (c *FakeTransportServers) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(transportserversResource, c.ns, opts))
-
 }
 
 // Create takes the representation of a transportServer and creates it.  Returns the server's representation of the transportServer, and an error, if there is any.
@@ -79,6 +78,18 @@ func (c *FakeTransportServers) Create(ctx context.Context, transportServer *v1al
 func (c *FakeTransportServers) Update(ctx context.Context, transportServer *v1alpha1.TransportServer, opts v1.UpdateOptions) (result *v1alpha1.TransportServer, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(transportserversResource, c.ns, transportServer), &v1alpha1.TransportServer{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.TransportServer), err
+}
+
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *FakeTransportServers) UpdateStatus(ctx context.Context, transportServer *v1alpha1.TransportServer, opts v1.UpdateOptions) (*v1alpha1.TransportServer, error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewUpdateSubresourceAction(transportserversResource, "status", c.ns, transportServer), &v1alpha1.TransportServer{})
 
 	if obj == nil {
 		return nil, err

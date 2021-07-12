@@ -23,7 +23,7 @@ func GetMapKeyAsBool(m map[string]string, key string, context apiObject) (bool, 
 	if str, exists := m[key]; exists {
 		b, err := ParseBool(str)
 		if err != nil {
-			return false, exists, fmt.Errorf("%s %v/%v '%s' contains invalid bool: %v, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
+			return false, exists, fmt.Errorf("%s %v/%v '%s' contains invalid bool: %w, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
 		}
 
 		return b, exists, nil
@@ -37,7 +37,7 @@ func GetMapKeyAsInt(m map[string]string, key string, context apiObject) (int, bo
 	if str, exists := m[key]; exists {
 		i, err := ParseInt(str)
 		if err != nil {
-			return 0, exists, fmt.Errorf("%s %v/%v '%s' contains invalid integer: %v, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
+			return 0, exists, fmt.Errorf("%s %v/%v '%s' contains invalid integer: %w, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
 		}
 
 		return i, exists, nil
@@ -51,7 +51,7 @@ func GetMapKeyAsInt64(m map[string]string, key string, context apiObject) (int64
 	if str, exists := m[key]; exists {
 		i, err := ParseInt64(str)
 		if err != nil {
-			return 0, exists, fmt.Errorf("%s %v/%v '%s' contains invalid integer: %v, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
+			return 0, exists, fmt.Errorf("%s %v/%v '%s' contains invalid integer: %w, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
 		}
 
 		return i, exists, nil
@@ -65,7 +65,7 @@ func GetMapKeyAsUint64(m map[string]string, key string, context apiObject, nonZe
 	if str, exists := m[key]; exists {
 		i, err := ParseUint64(str)
 		if err != nil {
-			return 0, exists, fmt.Errorf("%s %v/%v '%s' contains invalid uint64: %v, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
+			return 0, exists, fmt.Errorf("%s %v/%v '%s' contains invalid uint64: %w, ignoring", context.GetObjectKind().GroupVersionKind().Kind, context.GetNamespace(), context.GetName(), key, err)
 		}
 
 		if nonZero && i == 0 {
@@ -154,12 +154,12 @@ func validateHashLBMethod(method string) (string, error) {
 	keyWords := strings.Split(method, " ")
 
 	if keyWords[0] == "hash" {
-		if len(keyWords) == 2 || len(keyWords) == 3 && keyWords[2] == "consistent" {
+		if len(keyWords) == 2 || (len(keyWords) == 3 && keyWords[2] == "consistent") {
 			return method, nil
 		}
 	}
 
-	return "", fmt.Errorf("Invalid load balancing method: %q", method)
+	return "", fmt.Errorf("invalid load balancing method: %q", method)
 }
 
 // ParseBool ensures that the string value is a valid bool
@@ -183,16 +183,26 @@ func ParseUint64(s string) (uint64, error) {
 }
 
 // timeRegexp http://nginx.org/en/docs/syntax.html
-var timeRegexp = regexp.MustCompile(`^([0-9]+([ms|s|m|h|d|w|M|y]?){0,1} *)+$`)
+var timeRegexp = regexp.MustCompile(`^(\d+y)??\s*(\d+M)??\s*(\d+w)??\s*(\d+d)??\s*(\d+h)??\s*(\d+m)??\s*(\d+s?)??\s*(\d+ms)??$`)
 
 // ParseTime ensures that the string value in the annotation is a valid time.
 func ParseTime(s string) (string, error) {
-	s = strings.TrimSpace(s)
-
-	if timeRegexp.MatchString(s) {
-		return s, nil
+	if s == "" || strings.TrimSpace(s) == "" || !timeRegexp.MatchString(s) {
+		return "", errors.New("invalid time string")
 	}
-	return "", errors.New("Invalid time string")
+	units := timeRegexp.FindStringSubmatch(s)
+	years := units[1]
+	months := units[2]
+	weeks := units[3]
+	days := units[4]
+	hours := units[5]
+	mins := units[6]
+	secs := units[7]
+	if secs != "" && !strings.HasSuffix(secs, "s") {
+		secs = secs + "s"
+	}
+	millis := units[8]
+	return fmt.Sprintf("%s%s%s%s%s%s%s%s", years, months, weeks, days, hours, mins, secs, millis), nil
 }
 
 // OffsetFmt http://nginx.org/en/docs/syntax.html
@@ -225,6 +235,19 @@ func ParseSize(s string) (string, error) {
 	return "", errors.New("Invalid size string")
 }
 
+// https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffers
+var proxyBuffersRegexp = regexp.MustCompile(`^\d+ \d+[kKmM]?$`)
+
+// ParseProxyBuffersSpec ensures that the string value is a valid proxy buffer spec
+func ParseProxyBuffersSpec(s string) (string, error) {
+	s = strings.TrimSpace(s)
+
+	if proxyBuffersRegexp.MatchString(s) {
+		return s, nil
+	}
+	return "", errors.New("Invalid proxy buffers string")
+}
+
 // ParsePortList ensures that the string is a comma-separated list of port numbers
 func ParsePortList(s string) ([]int, error) {
 	var ports []int
@@ -241,7 +264,7 @@ func ParsePortList(s string) ([]int, error) {
 func parsePort(value string) (int, error) {
 	port, err := strconv.ParseInt(value, 10, 16)
 	if err != nil {
-		return 0, fmt.Errorf("Unable to parse port as integer: %s", err)
+		return 0, fmt.Errorf("Unable to parse port as integer: %w", err)
 	}
 
 	if port <= 0 {
@@ -321,8 +344,10 @@ func parseRewrites(service string) (serviceName string, rewrite string, err erro
 	return svcNameParts[1], rwPathParts[1], nil
 }
 
-var threshEx = regexp.MustCompile(`high=([1-9]|[1-9][0-9]|100) low=([1-9]|[1-9][0-9]|100)\b`)
-var threshExR = regexp.MustCompile(`low=([1-9]|[1-9][0-9]|100) high=([1-9]|[1-9][0-9]|100)\b`)
+var (
+	threshEx  = regexp.MustCompile(`high=([1-9]|[1-9][0-9]|100) low=([1-9]|[1-9][0-9]|100)\b`)
+	threshExR = regexp.MustCompile(`low=([1-9]|[1-9][0-9]|100) high=([1-9]|[1-9][0-9]|100)\b`)
+)
 
 // VerifyAppProtectThresholds ensures that threshold values are set correctly
 func VerifyAppProtectThresholds(value string) bool {

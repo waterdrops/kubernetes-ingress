@@ -4,16 +4,18 @@
 NGINX Ingress Controller
 ========================
 
+Request your `free 30-day trial <https://www.nginx.com/free-trial-request-nginx-ingress-controller/>`_ today.
+
 .. toctree::
    :maxdepth: 2
 
-   overview
+   intro/index
    installation/index
    configuration/index
    logging-and-monitoring/index
    troubleshooting
    app-protect/index
-   integration-with-cis
    third-party-modules/index
+   f5-ingresslink 
    releases
    Technical Specifications <technical-specifications>

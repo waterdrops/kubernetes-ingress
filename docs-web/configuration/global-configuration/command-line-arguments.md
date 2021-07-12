@@ -2,20 +2,21 @@
 
 The Ingress Controller supports several command-line arguments. Setting the arguments depends on how you install the Ingress Controller:
 * If you're using *Kubernetes manifests* (Deployment or DaemonSet) to install the Ingress Controller, to set the command-line arguments, modify those manifests accordingly. See the [Installation with Manifests](/nginx-ingress-controller/installation/installation-with-manifests) doc.
-* If you're using *Helm* to install the Ingress Controller, modify the parameters of the Helm chart that correspond to the command-line arguments. See the [Installation with Helm](/nginx-ingress-controller/installation/installation-with-helm) doc. 
+* If you're using *Helm* to install the Ingress Controller, modify the parameters of the Helm chart that correspond to the command-line arguments. See the [Installation with Helm](/nginx-ingress-controller/installation/installation-with-helm) doc.
 
 Below we describe the available command-line arguments:
 ```eval_rst
 .. option:: -enable-snippets
 
-	Enable custom NGINX configuration snippets in VirtualServer and VirtualServerRoute resources. (default false)
+	Enable custom NGINX configuration snippets in VirtualServer, VirtualServerRoute and TransportServer resources. (default false)
 
 .. option:: -default-server-tls-secret <string>
 
 	Secret with a TLS certificate and key for TLS termination of the default server.
 
 	- If not set, certificate and key in the file "/etc/nginx/secrets/default" are used.
-	- If a secret is set, but the Ingress controller is not able to fetch it from Kubernetes API, or if a secret is not set and the file "/etc/nginx/secrets/  default" does not exist, the Ingress controller will fail to start.
+	- If "/etc/nginx/secrets/default" doesn't exist, the Ingress Controller will configure NGINX to reject TLS connections to the default server.
+	- If a secret is set, but the Ingress controller is not able to fetch it from Kubernetes API, or it is not set and the Ingress Controller fails to read the file "/etc/nginx/secrets/default", the Ingress controller will fail to start.
 
 	Format: ``<namespace>/<name>``
 
@@ -47,7 +48,7 @@ Below we describe the available command-line arguments:
 
 	Enable TLS Passthrough on port 443.
 
-	Requires :option:`-enable-custom-resources`.	
+	Requires :option:`-enable-custom-resources`.
 
 .. option:: -external-service <string>
 
@@ -63,8 +64,8 @@ Below we describe the available command-line arguments:
 
 .. option:: -global-configuration <string>
 
-	A GlobalConfiguration resource for global configuration of the Ingress Controller. If the flag is set, but the Ingress Controller is not able to fetch the corresponding resource from Kubernetes API, the Ingress Controller will fail to start.
-	
+	A GlobalConfiguration resource for global configuration of the Ingress Controller.
+
 	Format: ``<namespace>/<name>``
 
 	Requires :option:`-enable-custom-resources`.
@@ -85,10 +86,10 @@ Below we describe the available command-line arguments:
 	For Kubernetes >= 1.18, a corresponding IngressClass resource with the name equal to the class must be deployed. Otherwise, the Ingress Controller will fail to start.
 	The Ingress controller only processes resources that belong to its class - i.e. have the "ingressClassName" field resource equal to the class.
 
-	For Kubernetes < 1.18, the Ingress Controller only processes resources that belong to its class - i.e have the annotation "kubernetes.io/ingress.class" (for Ingress resources) or field "ingressClassName" (for VirtualServer/VirtualServerRoute resources) equal to the class.
+	For Kubernetes < 1.18, the Ingress Controller only processes resources that belong to its class - i.e have the annotation "kubernetes.io/ingress.class" (for Ingress resources) or field "ingressClassName" (for VirtualServer/VirtualServerRoute/TransportServer resources) equal to the class.
 	Additionally, the Ingress Controller processes resources that do not have the class set, which can be disabled by setting the "-use-ingress-class-only" flag.
 
-	The Ingress Controller processes all the VirtualServer/VirtualServerRoute resources that do not have the "ingressClassName" field.
+	The Ingress Controller processes all the VirtualServer/VirtualServerRoute/TransportServer resources that do not have the "ingressClassName" field.
 
 	(default "nginx")
 
@@ -127,7 +128,7 @@ Below we describe the available command-line arguments:
 
 .. option:: -nginx-reload-timeout <value>
 
-    Timeout in milliseconds which the Ingress Controller will wait for a successful NGINX reload after a change or at the initial start. (default is 4000. Default is 20000 instead if `enable-app-protect` is true)
+    Timeout in milliseconds which the Ingress Controller will wait for a successful NGINX reload after a change or at the initial start. (default 60000)
 
 .. option:: -nginx-status
 
@@ -173,7 +174,7 @@ Below we describe the available command-line arguments:
 
 .. option:: -version
 
-	Print the version and git-commit hash and exit
+	Print the version, git-commit hash and build date and exit
 
 .. option:: -virtualserver-template-path <string>
 
@@ -199,6 +200,16 @@ Below we describe the available command-line arguments:
 	Sets the port where the Prometheus metrics are exposed.
 
 	Format: ``[1024 - 65535]`` (default 9113)
+
+.. option:: -prometheus-tls-secret <string>
+
+	A Secret with a TLS certificate and key for TLS termination of the Prometheus metrics endpoint.
+
+	- If the argument is not set, the prometheus endpoint will not use a TLS connection.
+
+	- If the argument is set, but the Ingress controller is not able to fetch the Secret from Kubernetes API, the Ingress controller will fail to start.
+
+	Format: ``<namespace>/<name>``
 
 .. option:: -spire-agent-address <string>
 

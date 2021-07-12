@@ -8,7 +8,7 @@ from suite.resources_utils import (
     replace_secret,
 )
 from suite.custom_resources_utils import (
-    read_crd,
+    read_custom_resource,
     delete_virtual_server,
     patch_virtual_server_from_yaml,
     patch_v_s_route_from_yaml,
@@ -59,7 +59,11 @@ invalid_token = f"{TEST_DATA}/jwt-policy/invalid-token.jwt"
         (
             {
                 "type": "complete",
-                "extra_args": [f"-enable-custom-resources", f"-enable-preview-policies", f"-enable-leader-election=false"],
+                "extra_args": [
+                    f"-enable-custom-resources",
+                    f"-enable-preview-policies",
+                    f"-enable-leader-election=false",
+                ],
             },
             {"example": "virtual-server-route"},
         )
@@ -74,6 +78,7 @@ class TestJWTPoliciesVsr:
         print(f"Create jwt policy")
         pol_name = create_policy_from_yaml(kube_apis.custom_objects, policy, namespace)
 
+        wait_before_test()
         with open(token, "r") as file:
             data = file.readline()
         headers = {"host": vs_host, "token": data}
@@ -91,6 +96,7 @@ class TestJWTPoliciesVsr:
         print(f"Create jwt policy #2")
         pol_name_2 = create_policy_from_yaml(kube_apis.custom_objects, policy_2, namespace)
 
+        wait_before_test()
         with open(token, "r") as file:
             data = file.readline()
         headers = {"host": vs_host, "token": data}
@@ -202,7 +208,7 @@ class TestJWTPoliciesVsr:
         resp = requests.get(f"{req_url}{v_s_route_setup.route_m.paths[0]}", headers=headers,)
         print(resp.status_code)
 
-        crd_info = read_crd(
+        crd_info = read_custom_resource(
             kube_apis.custom_objects,
             v_s_route_setup.route_m.namespace,
             "virtualserverroutes",
@@ -271,7 +277,10 @@ class TestJWTPoliciesVsr:
 
         resp = requests.get(f"{req_url}{v_s_route_setup.route_m.paths[0]}", headers=headers,)
         print(resp.status_code)
-        crd_info = read_crd(
+        policy_info = read_custom_resource(
+            kube_apis.custom_objects, v_s_route_setup.route_m.namespace, "policies", pol_name
+        )
+        crd_info = read_custom_resource(
             kube_apis.custom_objects,
             v_s_route_setup.route_m.namespace,
             "virtualserverroutes",
@@ -291,10 +300,20 @@ class TestJWTPoliciesVsr:
             assert resp.status_code == 200
             assert f"Request ID:" in resp.text
             assert crd_info["status"]["state"] == "Valid"
+            assert (
+                policy_info["status"]
+                and policy_info["status"]["reason"] == "AddedOrUpdated"
+                and policy_info["status"]["state"] == "Valid"
+            )
         elif policy == jwt_pol_invalid_src:
             assert resp.status_code == 500
             assert f"Internal Server Error" in resp.text
             assert crd_info["status"]["state"] == "Warning"
+            assert (
+                policy_info["status"]
+                and policy_info["status"]["reason"] == "Rejected"
+                and policy_info["status"]["state"] == "Invalid"
+            )
         else:
             pytest.fail(f"Not a valid case or parameter")
 
@@ -334,7 +353,7 @@ class TestJWTPoliciesVsr:
         delete_secret(kube_apis.v1, secret, v_s_route_setup.route_m.namespace)
         resp2 = requests.get(f"{req_url}{v_s_route_setup.route_m.paths[0]}", headers=headers,)
         print(resp2.status_code)
-        crd_info = read_crd(
+        crd_info = read_custom_resource(
             kube_apis.custom_objects,
             v_s_route_setup.route_m.namespace,
             "virtualserverroutes",
@@ -352,7 +371,7 @@ class TestJWTPoliciesVsr:
         assert f"Request ID:" in resp1.text
         assert crd_info["status"]["state"] == "Warning"
         assert (
-            "references an invalid Secret: secret doesn't exist or of an unsupported type"
+            f"references an invalid secret {v_s_route_setup.route_m.namespace}/{secret}: secret doesn't exist or of an unsupported type"
             in crd_info["status"]["message"]
         )
         assert resp2.status_code == 500
@@ -394,7 +413,7 @@ class TestJWTPoliciesVsr:
 
         resp2 = requests.get(f"{req_url}{v_s_route_setup.route_m.paths[0]}", headers=headers,)
         print(resp2.status_code)
-        crd_info = read_crd(
+        crd_info = read_custom_resource(
             kube_apis.custom_objects,
             v_s_route_setup.route_m.namespace,
             "virtualserverroutes",
@@ -453,7 +472,7 @@ class TestJWTPoliciesVsr:
         resp = requests.get(f"{req_url}{v_s_route_setup.route_m.paths[0]}", headers=headers,)
         print(resp.status_code)
 
-        crd_info = read_crd(
+        crd_info = read_custom_resource(
             kube_apis.custom_objects,
             v_s_route_setup.route_m.namespace,
             "virtualserverroutes",
@@ -510,10 +529,7 @@ class TestJWTPoliciesVsr:
             v_s_route_setup.route_m.namespace,
         )
         patch_virtual_server_from_yaml(
-            kube_apis.custom_objects,
-            v_s_route_setup.vs_name,
-            vs_src,
-            v_s_route_setup.namespace,
+            kube_apis.custom_objects, v_s_route_setup.vs_name, vs_src, v_s_route_setup.namespace,
         )
         wait_before_test()
 
@@ -535,4 +551,3 @@ class TestJWTPoliciesVsr:
         )
         assert resp.status_code == 401
         assert f"Authorization Required" in resp.text
-

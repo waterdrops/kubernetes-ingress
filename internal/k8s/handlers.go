@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 
@@ -9,8 +10,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1beta1"
 	"k8s.io/client-go/tools/cache"
-
-	"fmt"
 
 	conf_v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
 	conf_v1alpha1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1alpha1"
@@ -188,8 +187,6 @@ func createSecretHandlers(lbc *LoadBalancerController) cache.ResourceEventHandle
 // or a change of the externalName field of an ExternalName service.
 //
 // In both cases we enqueue the service to be processed by syncService
-// Also, because TransportServers aren't processed by syncService,
-// we enqueue them, so they get processed by syncTransportServer.
 func createServiceHandlers(lbc *LoadBalancerController) cache.ResourceEventHandlerFuncs {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -197,10 +194,6 @@ func createServiceHandlers(lbc *LoadBalancerController) cache.ResourceEventHandl
 
 			glog.V(3).Infof("Adding service: %v", svc.Name)
 			lbc.AddSyncQueue(svc)
-
-			if lbc.areCustomResourcesEnabled {
-				lbc.EnqueueTransportServerForService(svc)
-			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			svc, isSvc := obj.(*v1.Service)
@@ -219,10 +212,6 @@ func createServiceHandlers(lbc *LoadBalancerController) cache.ResourceEventHandl
 
 			glog.V(3).Infof("Removing service: %v", svc.Name)
 			lbc.AddSyncQueue(svc)
-
-			if lbc.areCustomResourcesEnabled {
-				lbc.EnqueueTransportServerForService(svc)
-			}
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			if !reflect.DeepEqual(old, cur) {
@@ -235,10 +224,6 @@ func createServiceHandlers(lbc *LoadBalancerController) cache.ResourceEventHandl
 				if hasServiceChanges(oldSvc, curSvc) {
 					glog.V(3).Infof("Service %v changed, syncing", curSvc.Name)
 					lbc.AddSyncQueue(curSvc)
-
-					if lbc.areCustomResourcesEnabled {
-						lbc.EnqueueTransportServerForService(curSvc)
-					}
 				}
 			}
 		},
@@ -460,7 +445,8 @@ func createPolicyHandlers(lbc *LoadBalancerController) cache.ResourceEventHandle
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			curPol := cur.(*conf_v1.Policy)
-			if !reflect.DeepEqual(old, cur) {
+			oldPol := old.(*conf_v1.Policy)
+			if !reflect.DeepEqual(oldPol.Spec, curPol.Spec) {
 				glog.V(3).Infof("Policy %v changed, syncing", curPol.Name)
 				lbc.AddSyncQueue(curPol)
 			}
@@ -497,12 +483,12 @@ func createIngressLinkHandlers(lbc *LoadBalancerController) cache.ResourceEventH
 		UpdateFunc: func(old, cur interface{}) {
 			oldLink := old.(*unstructured.Unstructured)
 			curLink := cur.(*unstructured.Unstructured)
-			updated, err := compareSpecs(oldLink, curLink)
+			different, err := areResourcesDifferent(oldLink, curLink)
 			if err != nil {
 				glog.V(3).Infof("Error when comparing IngressLinks: %v", err)
 				lbc.AddSyncQueue(curLink)
 			}
-			if updated {
+			if different {
 				glog.V(3).Infof("IngressLink %v changed, syncing", oldLink.GetName())
 				lbc.AddSyncQueue(curLink)
 			}
@@ -520,12 +506,12 @@ func createAppProtectPolicyHandlers(lbc *LoadBalancerController) cache.ResourceE
 		UpdateFunc: func(oldObj, obj interface{}) {
 			oldPol := oldObj.(*unstructured.Unstructured)
 			newPol := obj.(*unstructured.Unstructured)
-			updated, err := compareSpecs(oldPol, newPol)
+			different, err := areResourcesDifferent(oldPol, newPol)
 			if err != nil {
 				glog.V(3).Infof("Error when comparing policy %v", err)
 				lbc.AddSyncQueue(newPol)
 			}
-			if updated {
+			if different {
 				glog.V(3).Infof("ApPolicy %v changed, syncing", oldPol.GetName())
 				lbc.AddSyncQueue(newPol)
 			}
@@ -537,7 +523,8 @@ func createAppProtectPolicyHandlers(lbc *LoadBalancerController) cache.ResourceE
 	return handlers
 }
 
-func compareSpecs(oldresource, resource *unstructured.Unstructured) (bool, error) {
+// areResourcesDifferent returns true if the resources are different based on their spec.
+func areResourcesDifferent(oldresource, resource *unstructured.Unstructured) (bool, error) {
 	oldSpec, found, err := unstructured.NestedMap(oldresource.Object, "spec")
 	if !found {
 		glog.V(3).Infof("Warning, oldspec has unexpected format")
@@ -569,12 +556,12 @@ func createAppProtectLogConfHandlers(lbc *LoadBalancerController) cache.Resource
 		UpdateFunc: func(oldObj, obj interface{}) {
 			oldConf := oldObj.(*unstructured.Unstructured)
 			newConf := obj.(*unstructured.Unstructured)
-			updated, err := compareSpecs(oldConf, newConf)
+			different, err := areResourcesDifferent(oldConf, newConf)
 			if err != nil {
 				glog.V(3).Infof("Error when comparing LogConfs %v", err)
 				lbc.AddSyncQueue(newConf)
 			}
-			if updated {
+			if different {
 				glog.V(3).Infof("ApLogConf %v changed, syncing", oldConf.GetName())
 				lbc.AddSyncQueue(newConf)
 			}
@@ -596,12 +583,12 @@ func createAppProtectUserSigHandlers(lbc *LoadBalancerController) cache.Resource
 		UpdateFunc: func(oldObj, obj interface{}) {
 			oldSig := oldObj.(*unstructured.Unstructured)
 			newSig := obj.(*unstructured.Unstructured)
-			updated, err := compareSpecs(oldSig, newSig)
+			different, err := areResourcesDifferent(oldSig, newSig)
 			if err != nil {
 				glog.V(3).Infof("Error when comparing UserSigs %v", err)
 				lbc.AddSyncQueue(newSig)
 			}
-			if updated {
+			if different {
 				glog.V(3).Infof("ApUserSig %v changed, syncing", oldSig.GetName())
 				lbc.AddSyncQueue(newSig)
 			}

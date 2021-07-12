@@ -70,6 +70,7 @@ type Server struct {
 	IngressMTLS               *IngressMTLS
 	EgressMTLS                *EgressMTLS
 	OIDC                      *OIDC
+	WAF                       *WAF
 	PoliciesErrorReturn       *Return
 	VSNamespace               string
 	VSName                    string
@@ -77,10 +78,10 @@ type Server struct {
 
 // SSL defines SSL configuration for a server.
 type SSL struct {
-	HTTP2          bool
-	Certificate    string
-	CertificateKey string
-	Ciphers        string
+	HTTP2           bool
+	Certificate     string
+	CertificateKey  string
+	RejectHandshake bool
 }
 
 // IngressMTLS defines TLS configuration for a server. This is a subset of TLS specifically for clients auth.
@@ -112,6 +113,14 @@ type OIDC struct {
 	Scope         string
 	TokenEndpoint string
 	RedirectURI   string
+}
+
+// WAF defines WAF configuration.
+type WAF struct {
+	Enable              string
+	ApPolicy            string
+	ApSecurityLogEnable bool
+	ApLogConf           string
 }
 
 // Location defines a location.
@@ -151,6 +160,7 @@ type Location struct {
 	JWTAuth                  *JWTAuth
 	EgressMTLS               *EgressMTLS
 	OIDC                     bool
+	WAF                      *WAF
 	PoliciesErrorReturn      *Return
 	ServiceName              string
 	IsVSR                    bool

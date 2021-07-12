@@ -28,7 +28,7 @@ spec:
 Here is a breakdown of what this Ingress resource definition means:
 * The `metadata.name` field defines the name of the resource `cafe‑ingress`.
 * In the `spec.tls` field we set up SSL/TLS termination:
-    * In the `secretName`, we reference a secret resource by its name, `cafe‑secret`. The secret must belong to the same namespace as the Ingress, it must be of the type ``kubernetes.io/tls`` and contain keys named ``tls.crt`` and ``tls.key`` that hold the certificate and private key as described [here](https://kubernetes.io/docs/concepts/services-networking/ingress/#tls>). If the secret doesn't exist, NGINX will break any attempt to establish a TLS connection to the hosts to which the secret is applied.
+    * In the `secretName`, we reference a secret resource by its name, `cafe‑secret`. The secret must belong to the same namespace as the Ingress, it must be of the type ``kubernetes.io/tls`` and contain keys named ``tls.crt`` and ``tls.key`` that hold the certificate and private key as described [here](https://kubernetes.io/docs/concepts/services-networking/ingress/#tls>). If the secret doesn't exist or is invalid, NGINX will break any attempt to establish a TLS connection to the hosts to which the secret is applied.
     * In the `hosts` field, we apply the certificate and key to our `cafe.example.com` host.
 * In the `spec.rules` field, we define a host with domain name `cafe.example.com`.
 * In the `paths` field, we define two path‑based rules:
@@ -36,7 +36,7 @@ Here is a breakdown of what this Ingress resource definition means:
   * The rule with the path `/coffee` instructs NGINX to distribute the requests with the `/coffee` URI among the pods of the *coffee* service, which is deployed with the name `coffee‑svc` in the cluster.
   * Both rules instruct NGINX to distribute the requests to `port 80` of the corresponding service (the `servicePort` field).
 
-> For complete instructions on deploying the Ingress and Secret resources in the cluster, see the [complete-example](https://github.com/nginxinc/kubernetes-ingress/tree/master/examples/complete-example) in our GitHub repo.
+> For complete instructions on deploying the Ingress and Secret resources in the cluster, see the [complete-example](https://github.com/nginxinc/kubernetes-ingress/tree/v1.12.0/examples/complete-example) in our GitHub repo.
 
 > To learn more about the Ingress resource, see the [Ingress resource documentation](https://kubernetes.io/docs/concepts/services-networking/ingress/) in the Kubernetes docs.
 

@@ -77,6 +77,7 @@ type Upstream struct {
 	SlowStart                string            `json:"slow-start"`
 	Queue                    *UpstreamQueue    `json:"queue"`
 	SessionCookie            *SessionCookie    `json:"sessionCookie"`
+	UseClusterIP             bool              `json:"use-cluster-ip"`
 }
 
 // UpstreamBuffers defines Buffer Configuration for an Upstream.
@@ -318,13 +319,24 @@ type VirtualServerRouteStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:validation:Optional
 // +kubebuilder:resource:shortName=pol
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.state`,description="Current state of the Policy. If the resource has a valid status, it means it has been validated and accepted by the Ingress Controller."
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // Policy defines a Policy for VirtualServer and VirtualServerRoute resources.
 type Policy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec PolicySpec `json:"spec"`
+	Spec   PolicySpec   `json:"spec"`
+	Status PolicyStatus `json:"status"`
+}
+
+// PolicyStatus is the status of the policy resource
+type PolicyStatus struct {
+	State   string `json:"state"`
+	Reason  string `json:"reason"`
+	Message string `json:"message"`
 }
 
 // PolicySpec is the spec of the Policy resource.
@@ -337,6 +349,7 @@ type PolicySpec struct {
 	IngressMTLS   *IngressMTLS   `json:"ingressMTLS"`
 	EgressMTLS    *EgressMTLS    `json:"egressMTLS"`
 	OIDC          *OIDC          `json:"oidc"`
+	WAF           *WAF           `json:"waf"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -409,4 +422,19 @@ type OIDC struct {
 	ClientSecret  string `json:"clientSecret"`
 	Scope         string `json:"scope"`
 	RedirectURI   string `json:"redirectURI"`
+}
+
+// WAF defines an WAF policy.
+// policy status: preview
+type WAF struct {
+	Enable      bool         `json:"enable"`
+	ApPolicy    string       `json:"apPolicy"`
+	SecurityLog *SecurityLog `json:"securityLog"`
+}
+
+// SecurityLog defines the security log of a WAF policy.
+type SecurityLog struct {
+	Enable    bool   `json:"enable"`
+	ApLogConf string `json:"apLogConf"`
+	LogDest   string `json:"logDest"`
 }

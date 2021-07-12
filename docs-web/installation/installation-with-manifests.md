@@ -11,6 +11,7 @@ This document describes how to install the NGINX Ingress Controller in your Kube
     ```
     $ git clone https://github.com/nginxinc/kubernetes-ingress/
     $ cd kubernetes-ingress/deployments
+    $ git checkout v1.12.0
     ```
 
 ## 1. Configure RBAC
@@ -57,7 +58,7 @@ In this section, we create resources common for most of the Ingress Controller i
 
 ### Create Custom Resources
 
-**Note**: There are two different sets of custom resource definitions: one for Kubernetes <= v1.15 and one for Kubernetes >= v1.16. For Kubernetes <= v1.15 substitute `crds` with `crds-v1beta1` in the following commands.
+> **Note**: By default, it is required to create custom resource definitions for VirtualServer, VirtualServerRoute, TransportServer and Policy. Otherwise, the Ingress Controller pods will not become `Ready`. If you'd like to disable that requirement, configure [`-enable-custom-resources`](/nginx-ingress-controller/configuration/global-configuration/command-line-arguments#cmdoption-global-configuration) command-line argument to `false` and skip this section.
 
 1. Create custom resource definitions for [VirtualServer and VirtualServerRoute](/nginx-ingress-controller/configuration/virtualserver-and-virtualserverroute-resources), [TransportServer](/nginx-ingress-controller/configuration/transportserver-resource) and [Policy](/nginx-ingress-controller/configuration/policy-resource) resources:
     ```
@@ -72,11 +73,6 @@ If you would like to use the TCP and UDP load balancing features of the Ingress 
     ```
     $ kubectl apply -f common/crds/k8s.nginx.org_globalconfigurations.yaml
     ```
-1. Create a GlobalConfiguration resource:
-    ```
-    $ kubectl apply -f common/global-configuration.yaml
-    ```
-    **Note**: Make sure to reference this resource in the [`-global-configuration`](/nginx-ingress-controller/configuration/global-configuration/command-line-arguments#cmdoption-global-configuration) command-line argument.
 
 > **Feature Status**: The TransportServer, GlobalConfiguration and Policy resources are available as a preview feature: it is suitable for experimenting and testing; however, it must be used with caution in production environments. Additionally, while the feature is in preview, we might introduce some backward-incompatible changes to the resources specification in the next releases.
 
@@ -209,8 +205,15 @@ $ kubectl get pods --namespace=nginx-ingress
     ```
     $ kubectl delete namespace nginx-ingress
     ```
-2. Delete the ClusterRole and ClusterRoleBinding created in that step:
+1. Delete the ClusterRole and ClusterRoleBinding:
     ```
     $ kubectl delete clusterrole nginx-ingress
     $ kubectl delete clusterrolebinding nginx-ingress
+    ```
+1. Delete the Custom Resource Definitions:
+
+    **Note**: This step will also remove all associated Custom Resources.
+
+    ```
+    $ kubectl delete -f common/crds/
     ```

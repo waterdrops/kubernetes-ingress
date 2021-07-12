@@ -2,12 +2,18 @@
 upstream {{ $u.Name }} {
     zone {{ $u.Name }} 256k;
 
-    random two least_conn;
+    {{ if $u.LoadBalancingMethod }}
+    {{ $u.LoadBalancingMethod }};
+    {{ end }}
 
     {{ range $s := $u.Servers }}
-    server {{ $s.Address }};
+    server {{ $s.Address }} max_fails={{ $s.MaxFails }} fail_timeout={{ $s.FailTimeout }} max_conns={{ $s.MaxConnections }};
     {{ end }}
 }
+{{ end }}
+
+{{ range $snippet := .StreamSnippets }}
+{{- $snippet }}
 {{ end }}
 
 {{ $s := .Server }}
@@ -26,5 +32,18 @@ server {
     proxy_responses {{ $s.ProxyResponses }};
     {{ end }}
 
+    {{ range $snippet := $s.ServerSnippets }}
+    {{- $snippet }}
+    {{ end }}
+
     proxy_pass {{ $s.ProxyPass }};
+
+    proxy_timeout {{ $s.ProxyTimeout }};
+    proxy_connect_timeout {{ $s.ProxyConnectTimeout }};
+
+    {{ if $s.ProxyNextUpstream }}
+    proxy_next_upstream on;
+    proxy_next_upstream_timeout {{ $s.ProxyNextUpstreamTimeout }};
+    proxy_next_upstream_tries {{ $s.ProxyNextUpstreamTries }};
+    {{ end }}
 }
